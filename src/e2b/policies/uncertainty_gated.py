@@ -66,6 +66,7 @@ class UncertaintyGatedPolicy(ExplorationPolicy):
         warmup_steps: int = 5_000,
         confidence_smoothing: float = 1.0,
         confidence_decay: float = 0.99,
+        normalise_uncertainty: bool = False,
         estimator_kwargs: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(num_actions)
@@ -81,6 +82,20 @@ class UncertaintyGatedPolicy(ExplorationPolicy):
         self.k_uncertain = k_uncertain
         self.k_confident = num_actions if k_confident is None else k_confident
         self.scaler = QScaler(q_scaling, decay=q_scaling_decay)
+        # Feed the policy's own running Q-scale to the estimator so the
+        # uncertainty signal is dimensionless. See
+        # UncertaintyEstimator.set_scale_provider for why this matters; without
+        # it the signal grows with the Q-values and the gate never fires.
+        self.normalise_uncertainty = bool(normalise_uncertainty)
+        if self.normalise_uncertainty:
+            if q_scaling != "running":
+                # Every other mode returns a constant scale of 1.0, so this
+                # would silently be a no-op rather than an error.
+                raise ValueError(
+                    "normalise_uncertainty requires q_scaling='running'; "
+                    f"got {q_scaling!r}, whose scale is constant 1.0"
+                )
+            self.estimator.set_scale_provider(lambda: self.scaler.scale)
         self.warmup_steps = warmup_steps
         self.confidence_smoothing = float(np.clip(confidence_smoothing, 0.0, 1.0))
         self._confidence_ema = EMA(decay=confidence_decay)

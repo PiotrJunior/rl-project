@@ -33,6 +33,22 @@ arms:
   - label: gated_td_error
     policy: policy/uncertainty_gated_td
     overrides: {agent: {net: {num_heads: 1}}}
+  # Second iteration: identical to the two arms above except the uncertainty
+  # signal is divided by the policy's running Q-scale. Isolates that one change.
+  - label: gated_ensemble_scaled
+    policy: policy/uncertainty_gated_scaled
+    overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
+  - label: gated_td_error_scaled
+    policy: policy/uncertainty_gated_td_scaled
+    overrides: {agent: {net: {num_heads: 1}}}
+  # Third iteration: scale-normalised AND the reference frozen after warm-up,
+  # so it stops tracking the signal it is supposed to be a reference for.
+  - label: gated_ensemble_frozen
+    policy: policy/uncertainty_gated_frozen
+    overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
+  - label: gated_td_error_frozen
+    policy: policy/uncertainty_gated_td_frozen
+    overrides: {agent: {net: {num_heads: 1}}}
 seeds: [0, 1, 2]
 overrides:
   train:

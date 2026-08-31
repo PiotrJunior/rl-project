@@ -60,6 +60,8 @@ array comparisons, so the endpoints really are the textbook strategies.
 | `topp_boltzmann` | **2** | nucleus: support adapts per state to Q's peakedness |
 | `uncertainty_gated` | **extension** | knobs driven by measured Q-uncertainty, per state |
 | `uncertainty_gated_td` | **extension** | same, driven by the (free) TD-error signal |
+| `uncertainty_gated_scaled` | **extension v2** | …with the signal divided by the running Q-scale |
+| `uncertainty_gated_frozen` | **extension v3** | …and the normalising reference frozen after warm-up |
 
 `mixture_anneal` is genuinely different from `eps_boltzmann`, not a
 reparameterisation: at β = 0.5 it retains a real chance of a *uniformly random*
@@ -125,7 +127,7 @@ swig` also works).
 ## Reproduce
 
 ```bash
-make test                      # 187 tests
+make test                      # 194 tests
 make smoke                     # 3k-step end-to-end check
 
 make experiment-full           # THE study: 3 envs x 8 arms x 5 seeds  (~35 min, 8 workers)
@@ -201,7 +203,7 @@ src/e2b/
   analysis.py     IQM + stratified bootstrap CIs
   plotting.py     figures
 scripts/          run_sweep.py, make_plots.py
-tests/            187 tests
+tests/            194 tests
 report/REPORT.md  the write-up
 ```
 

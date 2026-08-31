@@ -1,0 +1,19 @@
+# EXTENSION, second iteration -- uncertainty-gated handover with a
+# SCALE-NORMALISED uncertainty signal. Ensemble signal.
+#
+# Why this arm exists: the first iteration (policy/uncertainty_gated.yaml)
+# failed, and the logged traces show why. Ensemble disagreement is a standard
+# deviation of Q-values, so it is measured in raw Q units -- and raw Q grows
+# throughout training. Measured on Acrobot, the signal GREW from 0.076 to 0.136
+# over 100k steps while the running reference grew with it, pinning the ratio
+# (and therefore the confidence) at a constant ~0.3 for the entire run. The
+# handover the extension exists to trigger never fired.
+#
+# This is the same failure the report's section 3 identifies for temperature,
+# in a place it was not applied: an absolute quantity in Q units is not
+# comparable across training time. The fix is the same fix -- divide by the
+# policy's own running Q-scale, so what drives the gate is uncertainty
+# RELATIVE to the size of the values.
+defaults: [policy/uncertainty_gated]
+policy:
+  normalise_uncertainty: true

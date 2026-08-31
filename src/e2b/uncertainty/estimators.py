@@ -14,6 +14,7 @@ running high-quantile of its own history, producing a confidence in [0, 1].
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -26,10 +27,47 @@ class UncertaintyEstimator(ABC):
 
     name = "base"
 
-    def __init__(self, quantile: float = 0.9, quantile_lr: float = 0.01) -> None:
+    def __init__(
+        self,
+        quantile: float = 0.9,
+        quantile_lr: float = 0.01,
+        reference_freeze_step: int = 0,
+    ) -> None:
         self._reference = RunningQuantile(q=quantile, lr=quantile_lr)
+        # 0 = never freeze (the default, and what the section 8.2 runs used).
+        # A positive value stops updating the reference at that step, turning it
+        # into a fixed calibration constant measured during early training.
+        # Without this the reference is estimated from the same stream it
+        # normalises, so it tracks the signal and `1 - u/ref` is pinned to a
+        # constant however the signal moves -- see set_scale_provider.
+        self.reference_freeze_step = int(reference_freeze_step)
         self._last_raw: float = 0.0
         self._last_confidence: float = 0.0
+        self._scale_provider: Callable[[], float] | None = None
+
+    def set_scale_provider(self, provider: Callable[[], float] | None) -> None:
+        """Divide the raw signal by an external Q-scale before normalising.
+
+        Both signals here are measured in **raw Q units**: ensemble
+        disagreement is a standard deviation of Q-values, and the TD error is a
+        difference of them. Q magnitudes grow substantially during training
+        (the whole point of :mod:`e2b.policies.scaling`), so an *absolute*
+        uncertainty can grow while the agent's *relative* uncertainty falls.
+        Normalising against a running quantile of the signal's own history does
+        not fix that -- the reference grows too, the ratio stays flat, and the
+        confidence gate never moves.
+
+        Supplying the same running Q-scale the policy uses for its temperature
+        makes the signal dimensionless, so a shrinking uncertainty *relative to
+        the size of the values* is what drives the handover. Off by default:
+        the runs reported in the report's section 8.2 did not have it.
+        """
+        self._scale_provider = provider
+
+    def _scale(self) -> float:
+        if self._scale_provider is None:
+            return 1.0
+        return max(float(self._scale_provider()), 1e-8)
 
     @abstractmethod
     def raw(self, **kwargs: Any) -> float:
@@ -54,13 +92,19 @@ class UncertaintyEstimator(ABC):
         self._last_confidence = c
         return c
 
-    def update_reference(self, value: float | None = None) -> None:
+    def update_reference(self, value: float | None = None,
+                         step: int | None = None) -> None:
         """Fold a signal value into the running reference.
 
         Kept separate from :meth:`confidence` so the reference can be updated on
         the *training* path (many samples per step, low variance) while
         confidence is queried on the *acting* path.
+
+        Ignored once ``step`` reaches ``reference_freeze_step``.
         """
+        if self.reference_freeze_step > 0 and step is not None:
+            if step >= self.reference_freeze_step:
+                return
         self._reference.update(self._last_raw if value is None else value)
 
     def diagnostics(self) -> dict[str, float]:
@@ -102,7 +146,7 @@ class EnsembleDisagreement(UncertaintyEstimator):
             raise ValueError(f"expected (num_heads, num_actions), got {q_heads.shape}")
         if q_heads.shape[0] < 2:
             return 0.0
-        return float(q_heads.std(axis=0).mean())
+        return float(q_heads.std(axis=0).mean()) / self._scale()
 
 
 class TdErrorUncertainty(UncertaintyEstimator):
@@ -121,17 +165,21 @@ class TdErrorUncertainty(UncertaintyEstimator):
     name = "td_error"
 
     def __init__(
-        self, quantile: float = 0.9, quantile_lr: float = 0.01, decay: float = 0.99
+        self,
+        quantile: float = 0.9,
+        quantile_lr: float = 0.01,
+        reference_freeze_step: int = 0,
+        decay: float = 0.99,
     ) -> None:
-        super().__init__(quantile, quantile_lr)
+        super().__init__(quantile, quantile_lr, reference_freeze_step)
         self._ema = EMA(decay=decay)
 
-    def observe_td_errors(self, td_errors: np.ndarray) -> float:
+    def observe_td_errors(self, td_errors: np.ndarray, step: int | None = None) -> float:
         """Fold a training batch's TD errors into the running estimate."""
-        value = float(np.abs(np.asarray(td_errors, dtype=np.float64)).mean())
+        value = float(np.abs(np.asarray(td_errors, dtype=np.float64)).mean()) / self._scale()
         self._ema.update(value)
         self._last_raw = self._ema.value
-        self._reference.update(self._ema.value)
+        self.update_reference(self._ema.value, step=step)
         return self._ema.value
 
     def raw(self, **kwargs: Any) -> float:

@@ -1,0 +1,21 @@
+# EXTENSION, third iteration -- scale-normalised signal AND a FROZEN reference.
+#
+# The second iteration (uncertainty_gated_scaled) made the signal dimensionless
+# and changed nothing: u/reference stayed pinned near 0.7 (ensemble) and 0.96
+# (TD error) for the whole run, exactly as before. That isolates the real
+# defect, which is structural rather than a matter of units or tuning:
+#
+#   confidence = 1 - u / quantile(u's own recent history)
+#
+# estimates the reference FROM THE STREAM IT NORMALISES. Whatever u does, the
+# reference follows it, the ratio converges to a constant, and the confidence
+# gate cannot move. No learning rate and no unit choice repairs that.
+#
+# This arm stops updating the reference at `reference_freeze_step`, turning it
+# into a fixed calibration constant measured during warm-up. Confidence then
+# rises if and only if uncertainty genuinely falls below its early-training
+# level -- which is what the gate was supposed to mean all along.
+defaults: [policy/uncertainty_gated_scaled]
+policy:
+  estimator_kwargs:
+    reference_freeze_step: 10000    # == warmup_steps

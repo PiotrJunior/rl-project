@@ -1,0 +1,6 @@
+# EXTENSION, third iteration -- TD-error signal, scale-normalised, frozen
+# reference. See policy/uncertainty_gated_frozen.yaml for the rationale.
+defaults: [policy/uncertainty_gated_td_scaled]
+policy:
+  estimator_kwargs:
+    reference_freeze_step: 10000

@@ -1,0 +1,8 @@
+# EXTENSION, second iteration -- scale-normalised TD-error signal.
+# See policy/uncertainty_gated_scaled.yaml for the rationale. The TD-error
+# signal showed the same pathology more sharply: it grew from 0.27 to 1.45 over
+# 100k steps, driving confidence to 0.04 (eps = 0.96) for the second half of
+# the run.
+defaults: [policy/uncertainty_gated_td]
+policy:
+  normalise_uncertainty: true

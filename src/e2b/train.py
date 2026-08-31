@@ -165,7 +165,7 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
                 confidence = policy.estimator.confidence(q_heads=q_heads)
                 # The reference quantile for the ensemble signal is updated from
                 # the acting path, since that is where it is measured.
-                policy.estimator.update_reference()
+                policy.estimator.update_reference(step=step)
 
         action = policy.act(q, step, action_rng, uncertainty=confidence)
         diagnostics.add(policy.diagnostics())
@@ -196,7 +196,7 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
             if stats is not None:
                 train_stats = stats
                 if td_signal is not None:
-                    td_signal.observe_td_errors(np.array([stats["td_error"]]))
+                    td_signal.observe_td_errors(np.array([stats["td_error"]]), step=step)
 
         if (step + 1) % max(1, cfg.train.diagnostics_interval) == 0:
             logger.diagnostics.write(

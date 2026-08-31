@@ -35,7 +35,8 @@ free; on LunarLander it fires thrusters at random and crashes the lander.
 | | result |
 |---|---|
 | **Resolved** (interval excludes 0.5) | The ε-floor's value reverses sign between CartPole and LunarLander (§7.1). The support path `anneal_k` beats ε-greedy on Acrobot final return, `P = 0.96 [0.76, 1.00]` (§7.2). |
-| **Resolved** (replicated on two machines) | Q-scale normalisation controls where the behaviour policy's entropy settles, and `none` never settles at all (§8.1). Both uncertainty-gated arms collapse, `P = 0.00`, attributable to the gate and not the ensemble architecture (§8.2). |
+| **Resolved** (replicated on two machines) | Q-scale normalisation controls where the behaviour policy's entropy settles, and `none` never settles at all (§8.1). The uncertainty-gated arms collapse, `P = 0.00`, attributable to the gate and not the ensemble architecture (§8.2). |
+| **Diagnosed** | The uncertainty gate never fired because confidence was normalised against a running quantile *of its own signal*, which tracks any trend and cancels it. Freezing the reference makes the handover fire as designed — confidence 0.46 → 0.71, ε 1.00 → 0.30 — and separates the epistemic signal (ensemble disagreement, falls 2×) from the unsuitable one (TD error, grows 3×). It still loses to the control (§8.2). |
 | **Not resolved** | Any ranking among the ε-floor variants on CartPole or LunarLander. Whether `per_state` Q-scaling costs performance. §6.2 shows a 3-seed ranking here does not survive a change of BLAS library. |
 
 ## 2. Method: one policy family, several paths through it
@@ -160,9 +161,19 @@ Two signals:
   progress rather than by step count.
 
 Both normalise the raw signal against a running high-quantile of its own
-history, so confidence is scale-free. This is essential: uncertainty falls by
-orders of magnitude over training, so any fixed threshold would trip once and
+history, so confidence is scale-free. The reasoning was that uncertainty falls
+by orders of magnitude over training, so any fixed threshold would trip once and
 never move again, collapsing the adaptive scheme into a step function.
+
+> **This design decision is the one that broke the extension, and §8.2 works
+> out why.** Normalising a signal against a running estimate drawn from *that
+> same signal* removes exactly the trend the gate exists to detect: the
+> reference follows the signal, the ratio goes to a constant, and confidence is
+> pinned there for the whole run. The premise was wrong too — measured on
+> Acrobot, neither raw signal falls over training; both grow, because both are
+> denominated in Q-values, which inflate as the value function learns.
+> `reference_freeze_step` (off by default) is the fix, and §8.2 shows the
+> handover firing once it is on.
 
 Two guards proved necessary in practice. **Warm-up**: before the reference
 quantile has data, confidence is pinned to 0, otherwise the first states report
@@ -258,7 +269,7 @@ is not a measurement of your program.
 | reduced (`acrobot_gym`) | Acrobot | 100k | 8 | 3 | 24 |
 | reduced (`main_gym`) | LunarLander | 400k | 8 | 3 | 24 |
 | Q-scaling ablation | Acrobot | 100k | 3 | 3 | 9 |
-| uncertainty extension | Acrobot | 100k | 5 | 3 | 15 |
+| uncertainty extension | Acrobot | 100k | 9 | 3 | 27 |
 
 The full study is 26.0M environment steps: 4.6 h of summed worker time, 35 min
 wall-clock. **§7 reports the 5-seed full study.** The 3-seed sweeps are retained
@@ -458,81 +469,148 @@ mid-flight, than on Acrobot's more decisive dynamics. This dataset does not
 test that; `running` remains the default because it is the mode whose behaviour
 matches its stated intent, not because it measurably won.
 
-### 8.2 Uncertainty-gated extension (Acrobot-v1, 100k steps)
+### 8.2 Uncertainty-gated extension (Acrobot-v1, 100k steps, 3 seeds)
+
+The extension went through **three iterations**. The first failed, the second
+falsified the obvious explanation for why, and the third identified and fixed
+the actual defect. All nine arms are in one sweep so they share seeds and
+architecture.
 
 | Variant | Final return | P(beats ε-greedy, ensemble) |
 |---|---|---|
 | ε→Boltzmann, ensemble architecture | −84.1 [−92.1, −77.2] | 0.56 [0.00, 1.00] |
 | **ε-greedy, ensemble (control)** | −93.2 [−117.7, −80.3] | — |
 | ε-greedy, single head | −105.4 [−138.3, −81.1] | 0.33 [0.00, 0.89] |
-| uncertainty-gated, ensemble signal | −385.8 [−500.0, −290.1] | 0.00 [0.00, 0.00] |
-| uncertainty-gated, TD-error signal | −398.5 [−500.0, −335.9] | 0.00 [0.00, 0.00] |
+| gated, ensemble, **frozen ref** (v3) | −296.1 [−500.0, −93.4] | 0.11 [0.00, 0.44] |
+| gated, TD error, scaled (v2) | −312.4 [−461.2, −97.9] | 0.11 [0.00, 0.44] |
+| gated, TD error, **frozen ref** (v3) | −357.1 [−452.9, −241.0] | 0.00 [0.00, 0.00] |
+| gated, ensemble, scaled (v2) | −375.1 [−500.0, −226.8] | 0.00 [0.00, 0.00] |
+| gated, ensemble (v1) | −385.8 [−500.0, −290.1] | 0.00 [0.00, 0.00] |
+| gated, TD error (v1) | −398.5 [−500.0, −335.9] | 0.00 [0.00, 0.00] |
 
-Both uncertainty-gated arms are **clearly worse** — non-overlapping CIs against
-every other arm, `P = 0.00`. Unlike every ranking in §7, **this result replicated
-exactly across both machines** (§6.2): same ordering, same collapse, gated arms
-at −330/−347 on the Linux box and −386/−399 here, `P = 0.00` in both. It is a
-real effect, not a seed artifact.
+**Every gated arm loses to the control.** The extension does not work at this
+budget, and the honest headline is that it failed. What follows is why, because
+the failure turned out to be diagnosable and partly fixable, and the diagnosis
+is more interesting than the ranking.
 
-The matched-architecture control (§4) does its job: the ensemble-vs-single-head
-ε-greedy comparison (−93.2 vs −105.4) shows the ensemble architecture itself is
-if anything mildly *helpful*, so the gated arms' collapse is attributable to the
-gating, not the extra heads.
+The matched-architecture control (§4) does its job throughout: ensemble
+ε-greedy (−93.2) beats single-head ε-greedy (−105.4), so the extra heads are
+mildly *helpful* and the collapse is attributable to the gating, not the
+architecture. This also replicated across both machines (§6.2) — v1's arms
+scored −330/−347 on the Linux box and −386/−399 here, `P = 0.00` in both.
 
-**Why**, and it is fully diagnosable from the logged knob traces
-(`report/figures/uncertainty_Acrobot-v1_{confidence,knobs}.png`), is a genuine
-finding about this scheme's calibration rather than a mystery:
+#### v1: the gate never fires
 
-1. **A confidence overshoot right as warm-up ends.** Confidence is pinned to 0
-   during the first `warmup_steps` (10k here), but the reference quantile
-   keeps accumulating raw uncertainty in the background throughout warm-up —
-   and raw uncertainty (TD error, ensemble disagreement) is largest early,
-   when the network is least trained. The instant warm-up ends, current
-   uncertainty is compared against that inflated reference and confidence
-   spikes to 0.83 (TD-error signal) or 0.33 (ensemble) within 2k steps — briefly pushing the policy toward near-Boltzmann (`k` up to 3) on a
-   network that has had only ~2,000 gradient steps. This is precisely the bad
-   combination the warm-up guard was designed to prevent (§4), except the
-   guard only pins confidence *during* warm-up and does nothing about the
-   transient the moment it ends.
-2. **Confidence then flatlines far too low, and never recovers.** The two
-   signals fail differently, but both fail:
+Confidence is pinned to 0 during warm-up (10k steps), then jumps and flatlines:
 
-   | step | 5k | 10k | 12k | 20k | 50k | 100k |
-   |---|---|---|---|---|---|---|
-   | confidence (ensemble) | 0.00 | 0.00 | **0.33** | 0.34 | 0.31 | 0.26 |
-   | ε (ensemble) | 1.00 | 1.00 | 0.67 | 0.67 | 0.69 | 0.74 |
-   | confidence (TD-error) | 0.00 | 0.00 | **0.83** | 0.28 | 0.04 | 0.04 |
-   | ε (TD-error) | 1.00 | 1.00 | 0.18 | 0.73 | **0.96** | 0.96 |
+| step | 5k | 10k | 12k | 20k | 50k | 100k |
+|---|---|---|---|---|---|---|
+| confidence (ensemble) | 0.00 | 0.00 | **0.33** | 0.34 | 0.31 | 0.26 |
+| ε (ensemble) | 1.00 | 1.00 | 0.67 | 0.67 | 0.69 | 0.74 |
+| confidence (TD error) | 0.00 | 0.00 | **0.83** | 0.28 | 0.04 | 0.04 |
+| ε (TD error) | 1.00 | 1.00 | 0.18 | 0.73 | **0.96** | 0.96 |
 
-   The **TD-error** arm overcorrects: the slow stochastic quantile tracker
-   (`RunningQuantile`, lr = 0.01) chases the falling signal down, the reference
-   shrinks with it, and confidence collapses to 0.04 by 50k and stays there —
-   `ε ≈ 0.96` for the second half of the run. The **ensemble** arm does not
-   overcorrect; it simply *plateaus* at confidence ≈ 0.3, which is the more
-   damaging failure because it looks stable. With
-   `eps_uncertain = 1.0, eps_confident = 0.01`, confidence 0.3 interpolates to
-   `ε = 0.70` exactly as observed — the gate is working as specified and the
-   specification is wrong.
+Both arms sit between `ε ≈ 0.67` and `ε ≈ 0.96` for essentially the whole run,
+while every fixed-schedule arm reaches `ε ≤ 0.05` by 30k. With
+`eps_uncertain = 1.0, eps_confident = 0.01`, confidence 0.3 interpolates to
+`ε = 0.70` exactly as observed: the gate is doing precisely what it was told,
+and what it was told is wrong. **The handover the extension exists to trigger
+never happens**, which is a sufficient explanation for the collapse on its own.
 
-   Either way both gated arms sit between `ε ≈ 0.67` and `ε ≈ 0.96` for
-   effectively the entire run, while every fixed-schedule arm has decayed to
-   `ε ≤ 0.05` by 30k steps. The gated policy spends nearly the whole budget
-   more exploratory than *any* other arm in the study. That is a sufficient
-   explanation for the collapse on its own, and it means the arms never got to
-   test the hypothesis they were built for: **the handover the extension exists
-   to trigger essentially never fires.**
+#### v2: the obvious explanation, tested and falsified
 
-This is **not evidence against uncertainty-gated exploration as an idea** — it
-is evidence that mapping a *relative* confidence signal onto absolute (ε, τ, k)
-endpoints needs a reference that adapts on a similar timescale to the quantity
-it normalises, and a high-quantile stochastic tracker with a small fixed
-learning rate does not. Two concrete fixes this dataset points to, neither
-implemented here: (a) exclude the warm-up window from the reference's own
-training so it does not start inflated by the noisiest phase of learning, and
-(b) widen the reference's adaptation rate or switch to a fixed-window quantile
-so it tracks the *current* uncertainty level rather than a decaying memory of
-its historical peak. Given the compute budget for this project, re-running
-with a fix was out of scope; it is the natural next step for this extension.
+Both signals are measured in **raw Q units** — ensemble disagreement is a
+standard deviation of Q-values, the TD error a difference of them — and Q
+magnitudes inflate during training. Measured over 100k steps the *raw* signals
+do not decay, they grow: ensemble disagreement 0.076 → 0.136, TD error
+0.27 → 1.45. This looked like §3's failure mode appearing in a place §3 was
+never applied, so `normalise_uncertainty` divides the signal by the same running
+Q-scale the policy uses for its temperature (`policy/uncertainty_gated_scaled`).
+
+It made the signal dimensionless and **changed nothing**:
+
+| `u / reference` | 11k | 40k | 100k |
+|---|---|---|---|
+| ensemble, v1 (raw units) | 0.699 | 0.671 | 0.741 |
+| ensemble, v2 (scale-normalised) | 0.691 | 0.712 | 0.831 |
+| TD error, v1 | 0.142 | 0.954 | 0.964 |
+| TD error, v2 | 0.327 | 0.958 | 0.963 |
+
+Final returns moved from −385.8 to −375.1 (ensemble) and −398.5 to −312.4 (TD),
+both well inside the noise. **The units were a real defect and not the binding
+one.**
+
+#### v3: the actual defect is structural
+
+The ratio is unmoved because of how confidence is defined:
+
+```
+confidence = 1 − u / quantile(u's own recent history)
+```
+
+The reference is estimated **from the very stream it normalises**. Whatever `u`
+does — grow, shrink, or hold — the running quantile follows it, `u/ref`
+converges to a constant, and confidence is pinned there. This is not a
+calibration error that a better learning rate would fix; **no choice of units,
+quantile or step size can make a self-normalising signal detect its own trend.**
+It was designed to be scale-free and is accidentally trend-free as well.
+
+v3 freezes the reference at the end of warm-up (`reference_freeze_step`), making
+it a fixed calibration constant measured during early training. Confidence then
+rises if and only if uncertainty falls below its early-training level, which is
+what the gate was always supposed to mean. The ensemble arm's trace:
+
+| `gated_ensemble_frozen` | 11k | 20k | 40k | 60k | 80k | 100k |
+|---|---|---|---|---|---|---|
+| uncertainty (frozen ref = 5.25) | 3.24 | 2.81 | 1.84 | 1.95 | 1.66 | **1.53** |
+| confidence | 0.00 | 0.46 | 0.64 | 0.62 | 0.68 | **0.71** |
+| ε | 1.00 | 0.55 | 0.37 | 0.39 | 0.33 | **0.30** |
+| k | 1.0 | 1.9 | 2.3 | 2.2 | 2.4 | **2.3** |
+
+**The handover fires.** Uncertainty genuinely falls, confidence rises
+monotonically, ε decays and the Boltzmann support widens — the mechanism
+described in §4, working, for the first time across three iterations. Final
+return improves from −385.8 to −296.1, and the per-seed spread is the
+interesting part: seed 1 finishes at **−93.4**, level with the control, while
+seed 0 finishes at −500. The mechanism can work; it is not yet reliable.
+
+Two things still stop it winning, and both are now specific rather than
+mysterious:
+
+1. **It is far too slow.** ε reaches only 0.30 by 100k where the fixed
+   schedules reach 0.05 by 30k. The arm spends the entire budget more
+   exploratory than every competitor, so it is still measuring a
+   less-trained network. The confidence→ε map, not the signal, is what needs
+   re-tuning now.
+2. **There is a feedback trap.** High ε produces a worse value function, which
+   produces higher disagreement, which holds ε high. A measurement-driven gate
+   closes a loop that a time-based schedule does not, and nothing in the design
+   accounts for that.
+
+#### The TD-error signal is unsuitable, and now demonstrably so
+
+With the reference frozen, the TD-error arm's uncertainty **grows** — 8.9 →
+24.9 — and confidence collapses to 0, holding `ε ≈ 0.95`. This is not a
+calibration problem either: `|TD error|` reflects reward magnitude, bootstrap
+noise and the target network's staleness, none of which shrink just because the
+agent has learned. It is an *aleatoric-flavoured* signal being asked to do an
+epistemic job. The ensemble's disagreement, which is genuinely epistemic, falls
+by a factor of 2 over the same window. **This comparison was the point of
+including both signals** (§4), and freezing the reference is what finally made
+it visible: only when the reference stops chasing the signal can you see which
+signal has a trend worth chasing.
+
+#### Status
+
+The extension is **implemented, diagnosed across three iterations, and still
+losing to the control**. The defect that made it lose is understood and fixed;
+what remains is a mis-tuned confidence→ε map and a feedback trap, both of which
+are ordinary tuning problems rather than design flaws. Given §6.2's finding that
+3 seeds cannot resolve a ranking in this family, the next step is not more
+tuning against these numbers but a 5-seed run of the frozen-reference ensemble
+arm against the control with a faster confidence→ε map. `normalise_uncertainty`
+and `reference_freeze_step` both default to **off**, so the v1 results above
+remain exactly reproducible.
 
 ## 9. What the design buys, independent of the numbers
 
@@ -594,6 +672,12 @@ Stated plainly, because they bound what the results above support.
   mechanism is about the *cost of a random action*, which these three happen to
   span usefully (free on CartPole, fatal on LunarLander). They do not span
   sparse reward, long horizons, or pixel observations at all.
+- **The extension is left mid-repair.** §8.2 fixes the defect that stopped the
+  uncertainty gate firing, but the frozen-reference arm is still slow (ε only
+  reaches 0.30 by 100k) and still loses to its control. The remaining problems
+  are named — a mis-tuned confidence→ε map and a value/uncertainty feedback
+  trap — but not solved, and re-tuning against 3-seed numbers that §6.2 shows
+  are unreliable would be the wrong move.
 - **One hyperparameter setting per variant.** Each variant's schedule endpoints
   and durations were chosen once, on reasoning rather than a search. A variant
   that looks worse may simply be mis-tuned. §8.1 shows how sensitive this family
@@ -610,7 +694,7 @@ Stated plainly, because they bound what the results above support.
 
 ```bash
 make setup                     # swig BEFORE gymnasium[box2d] -- see README
-make test                      # 187 tests
+make test                      # 194 tests
 
 make experiment-full           # THE study in §7: 3 envs x 8 arms x 5 seeds
 make experiment-ablation       # §8.1  Acrobot, Q-scaling
