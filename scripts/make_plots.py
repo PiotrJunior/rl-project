@@ -32,14 +32,20 @@ from e2b.plotting import (  # noqa: E402
 from e2b.results import group_by_env, load_sweep  # noqa: E402
 
 TITLES = {
-    "reduced_gym": "CartPole-v1 — exploration variants (reduced study)",
+    "reduced_gym": "CartPole-v1 — exploration variants",
+    "acrobot_gym": "Acrobot-v1 — exploration variants",
     "main_gym": "LunarLander-v3 — exploration variants",
-    "ablation_scaling": "LunarLander-v3 — Q-value scale normalisation ablation",
-    "uncertainty": "LunarLander-v3 — uncertainty-gated handover",
+    "ablation_scaling": "Acrobot-v1 — Q-value scale normalisation ablation",
+    "uncertainty": "Acrobot-v1 — uncertainty-gated handover",
     "full_gym": "Full study",
 }
 
-BASELINE = {"reduced_gym": "eps_greedy", "main_gym": "eps_greedy",
+# The arm each sweep's probability-of-improvement column is measured against.
+# For the uncertainty sweep this is the ENSEMBLE epsilon-greedy arm, not the
+# single-head one: comparing the gated arm against a single-head baseline would
+# confound the gating with the architecture change.
+BASELINE = {"reduced_gym": "eps_greedy", "acrobot_gym": "eps_greedy",
+            "main_gym": "eps_greedy",
             "ablation_scaling": "scaling_running", "uncertainty": "eps_greedy_ensemble",
             "full_gym": "eps_greedy"}
 
