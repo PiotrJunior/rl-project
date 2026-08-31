@@ -13,6 +13,9 @@ tqdm>=4.66
 # Atari (ALE) code path. Installed so the wrappers can be unit-tested; no Atari
 # training runs are part of this project (see README "Atari").
 ale-py>=0.10
+# gymnasium's AtariPreprocessing imports cv2 at construction time; it is not
+# pulled in by ale-py, so the Atari wrappers fail without it.
+opencv-python>=4.9
 
 # dev
 pytest>=8.0
