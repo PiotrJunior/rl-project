@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         payloads.append((data, label, str(out_root)))
 
     print(f"sweep '{args.sweep}': {len(payloads)} runs, {args.workers} workers")
-    for data, label, _ in payloads[: len(payloads)]:
+    for data, label, _ in payloads:
         cfg = config_from_dict({k: v for k, v in data.items() if k != "_label"})
         print(f"  {cfg.env.id:20s} {label:28s} seed={cfg.run.seed} "
               f"steps={cfg.train.total_steps}")

@@ -217,10 +217,10 @@ silently producing a run that tested the wrong thing.
 
 ### 6.1 Compute budget and what it constrains
 
-All experiments ran on a **4-core CPU box with no GPU**. Cleanly measured
-throughput of the identical agent is close across environments — the classic-
-control tasks and LunarLander both run at roughly 650–700 steps/s per worker on
-4 workers:
+Experiments in this report ran on a **4-core CPU box with no GPU**. Cleanly
+measured throughput of the identical agent is close across environments — the
+classic-control tasks and LunarLander both run at roughly 650–700 steps/s per
+worker on 4 workers, once a measurement artifact is corrected for:
 
 | environment | actions | steps/s per worker (4 workers) |
 |---|---|---|
@@ -230,25 +230,26 @@ control tasks and LunarLander both run at roughly 650–700 steps/s per worker o
 
 *(An earlier throughput check reported LunarLander at ~50 steps/s — a
 transient artifact of stale orphaned worker processes from a previous run
-competing for CPU at measurement time, not a real cost of Box2D. It was
-corrected before the main comparison was run, so the numbers in §7 use the
-full step budget below rather than a truncated one.)*
+competing for CPU at measurement time, not a real cost of Box2D. The
+correction matters: it means `configs/sweeps/main_gym.yaml` runs LunarLander at
+its full 400k-step budget directly, rather than a truncated one, at roughly
+1 h for all 24 runs on 4 workers — cheap enough that the honest move is to run
+it at full budget on whatever machine actually produces the numbers, rather
+than lock in a compromise here.)*
 
-| study | environment | steps | arms | seeds |
-|---|---|---|---|---|
-| main comparison | CartPole-v1 | 60k | 7 | 3 |
-| main comparison | Acrobot-v1 | 100k | 8 | 3 |
-| main comparison | LunarLander-v3 | 400k | 8 | 3 |
-| Q-scaling ablation | Acrobot-v1 | 100k | 3 | 3 |
-| uncertainty extension | Acrobot-v1 | 100k | 5 | 3 |
+| study | environment | steps | arms | seeds | run in this report |
+|---|---|---|---|---|---|
+| main comparison | CartPole-v1 | 60k | 7 | 3 | yes |
+| main comparison | Acrobot-v1 | 100k | 8 | 3 | yes |
+| main comparison | LunarLander-v3 | 400k | 8 | 3 | **configured, not run here** |
+| Q-scaling ablation | Acrobot-v1 | 100k | 3 | 3 | yes |
+| uncertainty extension | Acrobot-v1 | 100k | 5 | 3 | yes |
 
-These are the step budgets each sweep config actually used
-(`configs/sweeps/{reduced_gym,acrobot_gym,main_gym,ablation_scaling,uncertainty}.yaml`),
-not the full per-environment defaults in `configs/env/` — those full defaults
-(100k / 150k / 400k) are what `full_gym.yaml` uses for a 5-seed run. LunarLander
-in this table already is the full 400k default, since correcting the throughput
-measurement made the reduced budget unnecessary for that one sweep.
-
+**LunarLander results are not included in §7** — `main_gym.yaml` is fully
+configured and validated (`tests/test_sweeps.py` checks it expands and
+constructs correctly) but was not executed as part of this report; run
+`make experiment-main` to produce it. This is the same status as the Atari
+code path (§10): implemented and ready, not a claimed result.
 
 ## 7. Results: CartPole-v1 and Acrobot-v1
 
@@ -437,7 +438,8 @@ against independently written reference implementations.
 **The Q-scale normaliser makes a temperature portable.** Without it, "τ = 0.3"
 means something different on every environment and at every point in training,
 so the single number that defines Boltzmann exploration is not actually under
-the experimenter's control. §7 shows what happens without it.
+the experimenter's control. §8.1 shows what happens without it: an entropy
+trace that never settles, versus one that does.
 
 **Explicit action distributions make exploration measurable.** Computing
 `π(a|s)` rather than sampling procedurally costs microseconds and yields
@@ -457,9 +459,14 @@ Stated plainly, because they bound what the results above support.
   `configs/sweeps/full_gym.yaml` is set up for that.
 - **Reduced step budgets on CartPole and Acrobot.** The main comparison ran
   CartPole to 60k steps and Acrobot to 100k, both below their `configs/env/`
-  full defaults (100k / 150k). LunarLander runs the full 400k default. An
-  exploration strategy that pays off later in training than these budgets
-  cover could be undersold on the two smaller environments.
+  full defaults (100k / 150k). An exploration strategy that pays off later in
+  training than these budgets cover could be undersold on these two
+  environments.
+- **No LunarLander results.** `configs/sweeps/main_gym.yaml` runs the full
+  400k-step budget and is validated by `tests/test_sweeps.py`, but was not
+  executed as part of this report — see §6.1. LunarLander is the environment
+  the project brief names first, so this is the most consequential gap here;
+  `make experiment-main` produces it directly.
 - **No Atari results.** The ALE code path is implemented, unit-tested against
   real ALE environments, and verified to complete a training run end-to-end —
   but not trained. At ~10M frames per run, 8 arms × 5 seeds is on the order of
