@@ -1,0 +1,22 @@
+# ABLATION: does Q-value scale normalisation matter, and which mode?
+# Identical schedules in all three arms -- only `q_scaling` differs.
+base: base
+out_dir: results/runs/ablation_scaling
+envs: [env/lunarlander]
+policies:
+  - policy/eps_boltzmann          # running  (default)
+  - policy/eps_boltzmann_none     # none
+  - policy/eps_boltzmann_perstate # per_state
+seeds: [0, 1, 2]
+arms:
+  - {policy: policy/eps_boltzmann,          label: scaling_running}
+  - {policy: policy/eps_boltzmann_none,     label: scaling_none}
+  - {policy: policy/eps_boltzmann_perstate, label: scaling_per_state}
+overrides:
+  train:
+    total_steps: 250000
+    eval_interval: 12500
+    eval_episodes: 10
+    diagnostics_interval: 2500
+  agent:
+    replay: {capacity: 150000}

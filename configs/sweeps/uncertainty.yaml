@@ -1,0 +1,36 @@
+# EXTENSION study: uncertainty-gated handover.
+#
+# The control arm is the crux. `eps_greedy_ensemble` runs plain epsilon-greedy
+# with the SAME 5-head bootstrapped architecture as the gated arms, so that any
+# difference is attributable to the gating rather than to the ensemble's effect
+# on value learning. A single-head epsilon-greedy arm is included too, to
+# quantify what the architecture change alone does.
+base: base
+out_dir: results/runs/uncertainty
+envs: [env/lunarlander]
+policies: []          # `arms` is used instead, to pair policies with architectures
+arms:
+  - label: eps_greedy_single
+    policy: policy/eps_greedy
+    overrides: {agent: {net: {num_heads: 1}}}
+  - label: eps_greedy_ensemble          # <- the matched control
+    policy: policy/eps_greedy_ensemble
+    overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
+  - label: eps_boltzmann_ensemble       # best fixed schedule, matched arch
+    policy: policy/eps_boltzmann
+    overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
+  - label: gated_ensemble
+    policy: policy/uncertainty_gated
+    overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
+  - label: gated_td_error
+    policy: policy/uncertainty_gated_td
+    overrides: {agent: {net: {num_heads: 1}}}
+seeds: [0, 1, 2]
+overrides:
+  train:
+    total_steps: 250000
+    eval_interval: 12500
+    eval_episodes: 10
+    diagnostics_interval: 2500
+  agent:
+    replay: {capacity: 150000}

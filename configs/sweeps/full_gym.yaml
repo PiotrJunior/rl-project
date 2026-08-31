@@ -1,0 +1,16 @@
+# FULL study -- the configuration to reproduce on a real machine.
+# 3 environments x 8 arms x 5 seeds at full step budgets.
+# On an M1 Pro with `--workers 6` this is a few hours; see README.
+base: base
+out_dir: results/runs/full_gym
+envs: [env/cartpole, env/acrobot, env/lunarlander]
+policies:
+  - policy/eps_greedy
+  - policy/boltzmann
+  - policy/eps_boltzmann
+  - policy/mixture_anneal
+  - policy/topk_boltzmann
+  - policy/topk3_boltzmann
+  - policy/anneal_k
+  - policy/topp_boltzmann
+seeds: [0, 1, 2, 3, 4]

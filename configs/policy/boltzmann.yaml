@@ -1,0 +1,11 @@
+# BASELINE 2. Pure Boltzmann from the start, no epsilon floor.
+# Expected to be weak early -- the Q-function at initialisation is noise, so a
+# softmax over it is close to uniform but *biased* by that noise, which is worse
+# than the honest uniform of a high epsilon. That is precisely the premise the
+# project sets out to fix.
+policy:
+  name: boltzmann
+  epsilon: 0.0
+  temperature: {type: log_linear, start: 2.0, end: 0.2, duration_frac: 0.6}
+  top_k: num_actions
+  q_scaling: running

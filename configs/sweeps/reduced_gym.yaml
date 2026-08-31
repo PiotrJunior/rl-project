@@ -1,0 +1,24 @@
+# REDUCED study -- sized to complete on a 4-core CPU box in well under an hour.
+# Validates that every variant runs and produces a sane learning curve, and gives
+# a first (3-seed) signal. The publishable numbers come from full_gym.yaml.
+base: base
+out_dir: results/runs/reduced_gym
+envs: [env/cartpole]
+policies:
+  - policy/eps_greedy
+  - policy/boltzmann
+  - policy/eps_boltzmann
+  - policy/mixture_anneal
+  - policy/topk_boltzmann
+  - policy/anneal_k
+  - policy/topp_boltzmann
+seeds: [0, 1, 2]
+overrides:
+  train:
+    total_steps: 60000
+    eval_interval: 5000
+    eval_episodes: 10
+    diagnostics_interval: 1000
+  agent:
+    learning_starts: 1000
+    replay: {capacity: 50000}

@@ -1,0 +1,14 @@
+# IDEA 2, state-adaptive. Nucleus (top-p) sampling: the support is the smallest
+# set of highest-Q actions whose softmax mass reaches p.
+#
+# Unlike a fixed k, the support width responds to the state: where Q is sharply
+# peaked it collapses towards greedy, and where Q is flat -- exactly where the
+# agent has no basis for preferring one action -- it widens. This spends the
+# exploration budget where the Q-function is genuinely undecided rather than
+# uniformly in time.
+policy:
+  name: topp_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.02, duration_frac: 0.3}
+  temperature: 0.3
+  top_p: 0.9
+  q_scaling: running

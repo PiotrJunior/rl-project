@@ -1,0 +1,21 @@
+# EXTENSION -- uncertainty-gated handover, TD-error signal.
+#
+# The cheap alternative: an EMA of |TD error|, which prioritized replay already
+# computes, so it costs nothing and needs no ensemble. Its limitation is that it
+# is a single global scalar, so it can only produce a time-varying schedule --
+# albeit one driven by measured learning progress rather than by step count.
+#
+# Comparing this arm against the ensemble arm isolates the value of PER-STATE
+# resolution from the value of adaptive timing.
+policy:
+  name: uncertainty_gated
+  signal: td_error
+  eps_uncertain: 1.0
+  eps_confident: 0.01
+  tau_uncertain: 1.0
+  tau_confident: 0.3
+  k_uncertain: 1
+  k_confident: num_actions
+  q_scaling: running
+  warmup_steps: 10000
+  confidence_smoothing: 1.0

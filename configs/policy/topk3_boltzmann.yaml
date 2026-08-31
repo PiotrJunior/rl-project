@@ -1,0 +1,9 @@
+# IDEA 2 with k = 3. Only meaningfully different from k = 2 where |A| > 3
+# (LunarLander has 4 actions, Atari up to 18); on CartPole (|A| = 2) it is
+# identical to full Boltzmann and is reported as such.
+policy:
+  name: topk_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.02, duration_frac: 0.3}
+  temperature: 0.3
+  top_k: 3
+  q_scaling: running

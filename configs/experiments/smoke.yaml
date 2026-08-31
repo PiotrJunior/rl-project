@@ -1,0 +1,12 @@
+# Fast end-to-end check: does the machinery run at all? Not a learning test.
+defaults: [base, env/cartpole, policy/eps_greedy]
+agent:
+  learning_starts: 500
+  replay: {capacity: 10000}
+train:
+  total_steps: 3000
+  eval_interval: 1500
+  eval_episodes: 3
+  diagnostics_interval: 500
+run:
+  out_dir: results/smoke

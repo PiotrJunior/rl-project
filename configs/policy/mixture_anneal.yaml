@@ -1,0 +1,20 @@
+# IDEA 1a -- the mixture path. Literally interpolate the two action
+# distributions rather than deforming one into the other:
+#     pi = (1 - beta) * pi_eps_greedy + beta * pi_boltzmann,  beta: 0 -> 1.
+#
+# Differs from eps_boltzmann in a way that matters: at beta = 0.5 this policy
+# retains a real chance of a uniformly random action (inherited from the
+# epsilon-greedy component) even where Boltzmann is confident. The temperature
+# path passes through distributions that are neither endpoint.
+policy:
+  name: mixture_anneal
+  beta: {type: linear, start: 0.0, end: 1.0, duration_frac: 0.5}
+  first:                       # the epsilon-greedy component
+    epsilon: {type: linear, start: 1.0, end: 0.05, duration_frac: 0.3}
+    top_k: 1
+    q_scaling: none
+  second:                      # the Boltzmann component
+    epsilon: 0.0
+    temperature: {type: log_linear, start: 1.0, end: 0.3, duration_frac: 0.5}
+    top_k: num_actions
+    q_scaling: running

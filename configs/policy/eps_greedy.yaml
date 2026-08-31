@@ -1,0 +1,9 @@
+# BASELINE 1. Classic epsilon-greedy.
+# In the unified family this is top_k = 1: the softmax support is the argmax
+# set, so the temperature is irrelevant and the policy is
+#   eps * Uniform(A) + (1 - eps) * greedy.
+policy:
+  name: eps_greedy
+  epsilon: {type: linear, start: 1.0, end: 0.05, duration_frac: 0.3}
+  top_k: 1
+  q_scaling: none          # unused when k = 1; set explicitly to avoid implying otherwise

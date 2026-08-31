@@ -1,0 +1,49 @@
+# Base agent/training configuration shared by EVERY arm of the study.
+#
+# Nothing in this file may differ between exploration variants: the whole design
+# rests on the exploration policy being the single manipulated variable. Experiment
+# configs override `env`, `policy`, `train.total_steps` and `run.seed` only.
+
+env:
+  id: CartPole-v1
+  kind: gym
+
+agent:
+  gamma: 0.99
+  lr: 0.0003
+  adam_eps: 0.00015
+  batch_size: 64
+  double_dqn: true
+  target_update_interval: 500      # in gradient steps, not env steps
+  train_frequency: 4               # one gradient step per 4 env steps
+  learning_starts: 5000
+  max_grad_norm: 10.0
+  huber_kappa: 1.0
+  net:
+    hidden_sizes: [128, 128]
+    dueling: true
+    num_heads: 1                   # >1 only for the ensemble/uncertainty arms
+    bootstrap_prob: 0.8
+  replay:
+    capacity: 100000
+    prioritized: true
+    alpha: 0.5
+    beta_start: 0.4
+    beta_end: 1.0
+    n_step: 3
+
+train:
+  total_steps: 200000
+  eval_interval: 10000
+  eval_episodes: 10
+  diagnostics_interval: 2000
+  progress: false
+
+run:
+  seed: 0
+  device: auto
+  out_dir: results/runs
+  torch_threads: 1                 # sweeps run many processes; 1 thread each
+
+policy:
+  name: eps_greedy

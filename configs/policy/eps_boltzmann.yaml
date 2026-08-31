@@ -1,0 +1,14 @@
+# IDEA 1b -- the temperature path. The brief's "simple annealing from
+# epsilon-greedy to Boltzmann with gradually changing the temperature".
+#
+# At step 0: eps = 1 and tau = 1e-4. A temperature that small makes the softmax
+# exactly an argmax, so the policy IS epsilon-greedy -- not an approximation of
+# it. As training proceeds eps falls to 0.01 while tau rises to 0.3, and the
+# policy becomes essentially pure Boltzmann. The transition is continuous and
+# stays inside one parameterisation the whole way.
+policy:
+  name: eps_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.01, duration_frac: 0.5}
+  temperature: {type: log_linear, start: 0.0001, end: 0.3, duration_frac: 0.5}
+  top_k: num_actions
+  q_scaling: running

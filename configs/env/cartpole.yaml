@@ -1,0 +1,10 @@
+# Fast smoke environment: 2 actions, dense reward, solvable in ~60k steps.
+# Its small action set limits what top-k exploration can express (k in {1, 2}
+# only), so it validates correctness rather than discriminating between variants.
+env:
+  id: CartPole-v1
+  kind: gym
+train:
+  total_steps: 100000
+  eval_interval: 5000
+  diagnostics_interval: 1000

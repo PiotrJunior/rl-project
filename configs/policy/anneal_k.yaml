@@ -1,0 +1,15 @@
+# IDEA 2 expressed as an annealing path -- the support path, and the variant
+# that unifies both of the brief's ideas.
+#
+# k starts at 1 (exactly epsilon-greedy, since the support is the argmax set)
+# and grows to |A| (full Boltzmann) at fixed temperature. So the handover from
+# epsilon-greedy to Boltzmann happens by *widening the support* rather than by
+# raising the temperature. On environments with few actions the two paths are
+# nearly the same; they diverge as |A| grows, which is the argument for testing
+# this on Atari.
+policy:
+  name: anneal_k
+  epsilon: {type: linear, start: 1.0, end: 0.02, duration_frac: 0.3}
+  temperature: 0.3
+  top_k: {type: linear, start: 1, end: num_actions, duration_frac: 0.5}
+  q_scaling: running

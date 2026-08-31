@@ -1,0 +1,14 @@
+# Main study environment. 4 actions is the smallest count at which top-k
+# exploration has a genuine choice to make (k = 2 or 3 is strictly between
+# greedy and full Boltzmann), and the reward structure punishes bad exploration
+# visibly (crashes vs. hovering vs. landing).
+env:
+  id: LunarLander-v3
+  kind: gym
+agent:
+  replay:
+    capacity: 200000
+train:
+  total_steps: 400000
+  eval_interval: 20000
+  diagnostics_interval: 2000

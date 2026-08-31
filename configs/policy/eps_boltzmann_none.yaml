@@ -1,0 +1,10 @@
+# ABLATION: the temperature path with NO Q-scale normalisation.
+# Same schedules as eps_boltzmann.yaml; only `q_scaling` differs.
+# Demonstrates what happens when a temperature is expressed in raw Q units and
+# the Q-scale drifts by an order of magnitude over training.
+policy:
+  name: eps_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.01, duration_frac: 0.5}
+  temperature: {type: log_linear, start: 0.0001, end: 0.3, duration_frac: 0.5}
+  top_k: num_actions
+  q_scaling: none

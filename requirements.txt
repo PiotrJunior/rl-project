@@ -1,0 +1,18 @@
+# NOTE: install `swig` FIRST -- box2d-py (needed by LunarLander) has no prebuilt
+# wheels for CPython 3.11+ on linux-x86_64 or macOS-arm64 and must compile from
+# source, which requires swig on PATH. See `make setup` / README.
+swig>=4.2
+
+numpy>=1.26
+torch>=2.2
+gymnasium[box2d]>=1.0
+matplotlib>=3.8
+pyyaml>=6.0
+tqdm>=4.66
+
+# Atari (ALE) code path. Installed so the wrappers can be unit-tested; no Atari
+# training runs are part of this project (see README "Atari").
+ale-py>=0.10
+
+# dev
+pytest>=8.0

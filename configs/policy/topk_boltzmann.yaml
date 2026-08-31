@@ -1,0 +1,16 @@
+# IDEA 2 -- fixed small support. "Choose a number of actions (e.g. 2-3) and
+# sample from the Boltzmann distribution on these actions."
+#
+# The motivation is that a noisy Q-function often ranks the best action second;
+# spreading probability over the top few actions explores exactly those
+# near-best alternatives, instead of epsilon-greedy's uniform draw that spends
+# most of its exploration budget on actions Q already knows are bad.
+#
+# Epsilon still decays to a small floor so that an action wrongly excluded from
+# the top-k is not unreachable forever.
+policy:
+  name: topk_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.02, duration_frac: 0.3}
+  temperature: 0.3
+  top_k: 2
+  q_scaling: running

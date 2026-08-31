@@ -1,0 +1,14 @@
+# CONTROL ARM for the uncertainty extension.
+#
+# Identical exploration to eps_greedy.yaml, but intended to be run with the
+# ensemble architecture (agent.net.num_heads > 1). Without this arm, any gain
+# from `uncertainty_gated` would be confounded with the effect of bootstrapped
+# ensemble heads on the value function itself -- ensembles change learning, not
+# just uncertainty measurement. The comparison that answers the research
+# question is uncertainty_gated-with-ensemble vs THIS, not vs single-head
+# epsilon-greedy.
+policy:
+  name: eps_greedy
+  epsilon: {type: linear, start: 1.0, end: 0.05, duration_frac: 0.3}
+  top_k: 1
+  q_scaling: none

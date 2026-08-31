@@ -1,0 +1,26 @@
+# EXTENSION -- uncertainty-gated handover, ensemble signal.
+#
+# The brief: "when the uncertainty of the Q-function is low, direct more towards
+# Boltzmann; when it is high, epsilon-greedy is more reasonable."
+#
+# Confidence c in [0,1] comes from disagreement between bootstrapped Q-heads,
+# normalised against a running high-quantile of its own history. The three knobs
+# are interpolated between an uncertain endpoint (eps = 1, k = 1: epsilon-greedy)
+# and a confident endpoint (eps = 0.01, k = |A|: Boltzmann).
+#
+# This signal is PER-STATE: the agent can be Boltzmann in well-visited regions
+# while still epsilon-greedy in unfamiliar ones. No time-based schedule can do
+# that. Requires agent.net.num_heads > 1 -- see configs/experiments/uncertainty.yaml,
+# which also defines the matched-architecture control arm.
+policy:
+  name: uncertainty_gated
+  signal: ensemble
+  eps_uncertain: 1.0
+  eps_confident: 0.01
+  tau_uncertain: 1.0
+  tau_confident: 0.3
+  k_uncertain: 1
+  k_confident: num_actions
+  q_scaling: running
+  warmup_steps: 10000
+  confidence_smoothing: 1.0     # 1.0 = fully per-state; 0.0 = global average

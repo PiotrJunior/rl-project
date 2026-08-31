@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Experiment outputs: raw per-run artifacts are large and regenerable.
+# Aggregated summaries under results/summaries/ ARE committed (see !rules below).
+results/runs/
+results/**/checkpoints/
+*.pt
+*.ckpt
+
+# Keep committed summaries and figures
+!results/summaries/
+!results/summaries/**
+!report/figures/**
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

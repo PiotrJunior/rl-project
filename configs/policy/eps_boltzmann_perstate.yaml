@@ -1,0 +1,11 @@
+# ABLATION: the temperature path with PER-STATE Q normalisation.
+# Same schedules as eps_boltzmann.yaml; only `q_scaling` differs.
+# Per-state normalisation forces every Q-row to unit spread, so a state where
+# all actions are genuinely equivalent is rescaled into a confident preference
+# over what is really noise.
+policy:
+  name: eps_boltzmann
+  epsilon: {type: linear, start: 1.0, end: 0.01, duration_frac: 0.5}
+  temperature: {type: log_linear, start: 0.0001, end: 0.3, duration_frac: 0.5}
+  top_k: num_actions
+  q_scaling: per_state

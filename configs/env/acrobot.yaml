@@ -1,0 +1,10 @@
+# Secondary environment: 3 actions, sparse-ish reward, short horizon.
+# Included because its reward scale (-500..-70) is completely different from
+# CartPole's (0..500), which is what exercises the Q-scale normalisation.
+env:
+  id: Acrobot-v1
+  kind: gym
+train:
+  total_steps: 150000
+  eval_interval: 10000
+  diagnostics_interval: 2000
