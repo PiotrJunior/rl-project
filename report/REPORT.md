@@ -356,8 +356,57 @@ performance consequence is not resolved here**.
 
 ### 8.2 Uncertainty-gated extension (Acrobot-v1, 100k steps)
 
-*(Completed once the `uncertainty` sweep finishes — see
-`results/summaries/uncertainty_table.md` for the numbers and
-`report/figures/uncertainty_*` for the figures, including the confidence trace
-that shows whether the measured signal actually moved and whether it moved the
-policy.)*
+| Variant | Final return | P(beats ε-greedy, ensemble) |
+|---|---|---|
+| ε→Boltzmann, ensemble architecture | −82.9 [−88.7, −77.4] | 0.67 [0.11, 1.00] |
+| **ε-greedy, ensemble (control)** | −106.5 [−156.1, −80.5] | — |
+| ε-greedy, single head | −150.9 [−229.5, −86.5] | 0.22 [0.00, 0.67] |
+| uncertainty-gated, TD-error signal | −330.4 [−394.6, −222.0] | 0.00 [0.00, 0.00] |
+| uncertainty-gated, ensemble signal | −346.6 [−500.0, −160.9] | 0.00 [0.00, 0.00] |
+
+Both uncertainty-gated arms are **clearly worse** here — non-overlapping CIs
+against every other arm, `P = 0.00`. The matched-architecture control (§4)
+does its job: the ensemble-vs-single-head epsilon-greedy comparison (−106.5 vs
+−150.9) shows the ensemble architecture itself is if anything mildly *helpful*,
+so the gated arms' collapse is attributable to the gating, not the extra heads.
+
+**Why**, and it is fully diagnosable from the logged knob traces
+(`report/figures/uncertainty_Acrobot-v1_{confidence,knobs}.png`), is a genuine
+finding about this scheme's calibration rather than a mystery:
+
+1. **A confidence overshoot right as warm-up ends.** Confidence is pinned to 0
+   during the first `warmup_steps` (10k here), but the reference quantile
+   keeps accumulating raw uncertainty in the background throughout warm-up —
+   and raw uncertainty (TD error, ensemble disagreement) is largest early,
+   when the network is least trained. The instant warm-up ends, current
+   uncertainty is compared against that inflated reference and confidence
+   spikes to ≈0.85 (TD-error signal) or ≈0.35 (ensemble) within a few thousand
+   steps — briefly pushing the policy toward near-Boltzmann (`k` up to 3) on a
+   network that has had only ~2,000 gradient steps. This is precisely the bad
+   combination the warm-up guard was designed to prevent (§4), except the
+   guard only pins confidence *during* warm-up and does nothing about the
+   transient the moment it ends.
+2. **The reference then overcorrects and stays there.** As the slow stochastic
+   quantile tracker (`RunningQuantile`, lr = 0.01) chases the now-lower signal
+   down, the *reference* keeps shrinking too, so confidence decays back
+   towards ≈0.15–0.2 (ensemble) / ≈0.05 (TD-error) and **stays there for the
+   rest of the 100k-step run** — it never recovers. With
+   `eps_uncertain = 1.0, eps_confident = 0.01`, a steady-state confidence of
+   0.2 interpolates to `ε ≈ 0.80`. The knob trace confirms this directly: both
+   gated arms sit at `ε ≈ 0.75–0.95` for effectively the entire run, while
+   every fixed-schedule arm has decayed to `ε ≤ 0.05` by 30k steps. The gated
+   policy spends nearly this whole budget more exploratory than *any* other
+   arm in the study, which is a straightforward, sufficient explanation for
+   why it learns slower within a fixed 100k-step budget.
+
+This is **not evidence against uncertainty-gated exploration as an idea** — it
+is evidence that mapping a *relative* confidence signal onto absolute (ε, τ, k)
+endpoints needs a reference that adapts on a similar timescale to the quantity
+it normalises, and a high-quantile stochastic tracker with a small fixed
+learning rate does not. Two concrete fixes this dataset points to, neither
+implemented here: (a) exclude the warm-up window from the reference's own
+training so it does not start inflated by the noisiest phase of learning, and
+(b) widen the reference's adaptation rate or switch to a fixed-window quantile
+so it tracks the *current* uncertainty level rather than a decaying memory of
+its historical peak. Given the compute budget for this project, re-running
+with a fix was out of scope; it is the natural next step for this extension.
