@@ -10,7 +10,7 @@ PYTHON ?= python3
 
 .PHONY: help venv setup test smoke experiment-reduced experiment-acrobot \
         experiment-main experiment-ablation experiment-uncertainty \
-        experiment-full plots clean
+        experiment-full plots paper clean
 
 help:
 	@echo "make setup                 create .venv and install dependencies"
@@ -23,6 +23,7 @@ help:
 	@echo "make experiment-uncertainty  uncertainty-gated extension study on Acrobot (~3 min)"
 	@echo "make experiment-full       THE study: 3 envs x 8 arms x 5 seeds (~35 min, WORKERS=8)"
 	@echo "make plots SWEEP=full_gym  regenerate figures and tables for one sweep"
+	@echo "make paper                 build paper/paper.tex -> paper/paper.pdf"
 	@echo ""
 	@echo "Override parallelism with WORKERS=N (default 4; timings above assume 8)."
 
@@ -72,6 +73,12 @@ SWEEP ?= reduced_gym
 plots:
 	PYTHONPATH=src $(PY) scripts/make_plots.py --sweep $(SWEEP)
 
+# Needs a TeX distribution (MacTeX / TeX Live). Figures come from
+# report/figures/, so run `make plots` first if they are stale.
+paper:
+	cd paper && latexmk -pdf -interaction=nonstopmode paper.tex
+
 clean:
 	rm -rf results/runs .pytest_cache
+	cd paper && latexmk -C 2>/dev/null || true
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

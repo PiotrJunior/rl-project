@@ -24,6 +24,18 @@ results/**/checkpoints/
 !results/summaries/**
 !report/figures/**
 
+# LaTeX build artifacts (paper.pdf is a build output, not a source)
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.synctex.gz
+paper/*.toc
+paper/*.bbl
+paper/*.blg
+paper/paper.pdf
+
 # OS / editor
 .DS_Store
 .idea/
