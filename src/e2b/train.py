@@ -33,8 +33,44 @@ from e2b.utils.logging import RunLogger
 from e2b.utils.seeding import make_rng, resolve_device, seed_everything
 
 
-def _diagnostic_row(step: int, policy, agent, train_stats, recent_returns) -> dict:
-    """Snapshot of exploration internals + learning state at one step.
+class DiagnosticAccumulator:
+    """Averages the exploration policy's per-step diagnostics over an interval.
+
+    Logging the policy's state at a single sampled step produces a signal
+    dominated by which state happened to be visited at that instant -- entropy
+    at one state says nothing about the behaviour policy overall. Since the
+    point of these columns is to show *when the epsilon-greedy -> Boltzmann
+    handover actually happened*, they have to be averages over the interval,
+    not snapshots taken at its edge.
+
+    Scheduled knobs (epsilon, temperature) are deterministic functions of the
+    step, so averaging them is harmless; state-dependent quantities (entropy,
+    non-greedy mass, support size, confidence) are the ones that need it.
+    """
+
+    def __init__(self) -> None:
+        self._sums: dict[str, float] = {}
+        self._counts: dict[str, int] = {}
+
+    def add(self, values: dict[str, Any]) -> None:
+        for key, value in values.items():
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                continue
+            if not np.isfinite(value):
+                continue
+            self._sums[key] = self._sums.get(key, 0.0) + float(value)
+            self._counts[key] = self._counts.get(key, 0) + 1
+
+    def mean(self) -> dict[str, float]:
+        return {k: self._sums[k] / self._counts[k] for k in self._sums if self._counts[k]}
+
+    def reset(self) -> None:
+        self._sums.clear()
+        self._counts.clear()
+
+
+def _diagnostic_row(step: int, accumulator, agent, train_stats, recent_returns) -> dict:
+    """Interval-averaged exploration internals + learning state.
 
     ``entropy`` and ``non_greedy`` are the load-bearing columns: they are
     comparable across every variant, whereas epsilon and temperature are not
@@ -43,7 +79,7 @@ def _diagnostic_row(step: int, policy, agent, train_stats, recent_returns) -> di
     the Q-scale grows).
     """
     row: dict[str, Any] = {"step": step}
-    row.update(policy.diagnostics())
+    row.update(accumulator.mean())
     if train_stats:
         row.update(train_stats)
     row["replay_size"] = len(agent.replay)
@@ -95,6 +131,7 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
     recent_returns: deque[float] = deque(maxlen=20)
     train_stats: dict[str, float] | None = None
     curve: list[dict[str, Any]] = []
+    diagnostics = DiagnosticAccumulator()
     started = time.time()
 
     progress = None
@@ -118,6 +155,7 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
                 policy.estimator.update_reference()
 
         action = policy.act(q, step, action_rng, uncertainty=confidence)
+        diagnostics.add(policy.diagnostics())
         next_obs, reward, terminated, truncated, info = env.step(action)
 
         agent.observe(obs, action, float(reward), next_obs, terminated, truncated)
@@ -149,8 +187,9 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
 
         if (step + 1) % max(1, cfg.train.diagnostics_interval) == 0:
             logger.diagnostics.write(
-                _diagnostic_row(step + 1, policy, agent, train_stats, recent_returns)
+                _diagnostic_row(step + 1, diagnostics, agent, train_stats, recent_returns)
             )
+            diagnostics.reset()
 
         if (step + 1) % max(1, cfg.train.eval_interval) == 0 or step + 1 == cfg.train.total_steps:
             metrics = evaluate(
