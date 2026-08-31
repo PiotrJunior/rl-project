@@ -129,7 +129,7 @@ make experiment-reduced        # CartPole, 7 variants, 3 seeds   (~15-20 min, 4 
 make experiment-acrobot        # Acrobot, 8 variants, 3 seeds    (~15-20 min, 4 cores)
 make experiment-ablation       # Q-scaling ablation, on Acrobot  (~7 min)
 make experiment-uncertainty    # uncertainty-gated extension, on Acrobot (~12 min)
-make experiment-main           # LunarLander, 8 variants, 3 seeds (~3-4 h -- see note below)
+make experiment-main           # LunarLander, 8 variants, 3 seeds, full 400k budget (~1 h)
 
 make plots SWEEP=main_gym      # regenerate figures + tables
 ```

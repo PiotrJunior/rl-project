@@ -217,27 +217,37 @@ silently producing a run that tested the wrong thing.
 
 ### 6.1 Compute budget and what it constrains
 
-All experiments ran on a **4-core CPU box with no GPU**. Measured throughput of
-the identical agent differs sharply by environment:
+All experiments ran on a **4-core CPU box with no GPU**. Cleanly measured
+throughput of the identical agent is close across environments — the classic-
+control tasks and LunarLander both run at roughly 650–700 steps/s per worker on
+4 workers:
 
-| environment | actions | steps/s per worker | why |
-|---|---|---|---|
-| CartPole-v1 | 2 | ~400 | trivial physics |
-| Acrobot-v1 | 3 | ~400 | trivial physics |
-| LunarLander-v3 | 4 | **~50** | Box2D contact solving dominates |
+| environment | actions | steps/s per worker (4 workers) |
+|---|---|---|
+| CartPole-v1 | 2 | ~340–700 |
+| Acrobot-v1 | 3 | ~640–710 |
+| LunarLander-v3 | 4 | ~660–700 |
 
-LunarLander is therefore ~8× more expensive per step than the classic-control
-tasks, which is what set the step budgets below. This is a real constraint on
-the conclusions, and §10 says so plainly rather than presenting the numbers as
-though they came from a full-budget study.
+*(An earlier throughput check reported LunarLander at ~50 steps/s — a
+transient artifact of stale orphaned worker processes from a previous run
+competing for CPU at measurement time, not a real cost of Box2D. It was
+corrected before the main comparison was run, so the numbers in §7 use the
+full step budget below rather than a truncated one.)*
 
 | study | environment | steps | arms | seeds |
 |---|---|---|---|---|
 | main comparison | CartPole-v1 | 60k | 7 | 3 |
 | main comparison | Acrobot-v1 | 100k | 8 | 3 |
-| main comparison | LunarLander-v3 | 120k | 8 | 3 |
+| main comparison | LunarLander-v3 | 400k | 8 | 3 |
 | Q-scaling ablation | Acrobot-v1 | 100k | 3 | 3 |
 | uncertainty extension | Acrobot-v1 | 100k | 5 | 3 |
+
+These are the step budgets each sweep config actually used
+(`configs/sweeps/{reduced_gym,acrobot_gym,main_gym,ablation_scaling,uncertainty}.yaml`),
+not the full per-environment defaults in `configs/env/` — those full defaults
+(100k / 150k / 400k) are what `full_gym.yaml` uses for a 5-seed run. LunarLander
+in this table already is the full 400k default, since correcting the throughput
+measurement made the reduced budget unnecessary for that one sweep.
 
 
 ## 7. Results: CartPole-v1 and Acrobot-v1
@@ -445,12 +455,11 @@ Stated plainly, because they bound what the results above support.
   relative to DQN's seed variance, and 3 seeds is below what is needed to
   resolve them. Five to ten seeds is the minimum for confident claims;
   `configs/sweeps/full_gym.yaml` is set up for that.
-- **Reduced step budgets.** LunarLander ran to 120k steps rather than the
-  ~400k a DQN needs to actually solve it (~200 return). The arms are compared
-  during the *learning* phase, not at convergence, and an exploration strategy
-  that pays off late could be undersold here. This was forced by measured
-  throughput: LunarLander runs ~8× slower per step than the classic-control
-  tasks on this hardware.
+- **Reduced step budgets on CartPole and Acrobot.** The main comparison ran
+  CartPole to 60k steps and Acrobot to 100k, both below their `configs/env/`
+  full defaults (100k / 150k). LunarLander runs the full 400k default. An
+  exploration strategy that pays off later in training than these budgets
+  cover could be undersold on the two smaller environments.
 - **No Atari results.** The ALE code path is implemented, unit-tested against
   real ALE environments, and verified to complete a training run end-to-end —
   but not trained. At ~10M frames per run, 8 arms × 5 seeds is on the order of
