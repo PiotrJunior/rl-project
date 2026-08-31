@@ -307,8 +307,57 @@ mode described in §1 made visible.
 
 ## 8. Results: Q-scaling ablation and the uncertainty extension
 
-*(This section is completed once `ablation_scaling` and `uncertainty` finish —
-see `results/summaries/ablation_scaling_table.md` and
-`results/summaries/uncertainty_table.md` for the underlying numbers, and
-`report/figures/ablation_scaling_*` / `report/figures/uncertainty_*` for the
-figures.)*
+### 8.1 Q-scaling ablation (Acrobot-v1, `eps_boltzmann` schedule, 100k steps)
+
+| `q_scaling` mode | Final return | P(beats `running`) |
+|---|---|---|
+| `per_state` | −89.1 [−94.7, −83.0] | 0.78 [0.33, 1.00] |
+| `running` (default) | −163.0 [−226.9, −85.8] | — (baseline) |
+| `none` | −242.3 [−416.3, −86.6] | 0.33 [0.00, 0.89] |
+
+The final-return CIs overlap enough (`per_state` vs `running` in particular)
+that the ranking above is **not** a resolved finding at `n = 3` — the learning
+curves (`report/figures/ablation_scaling_Acrobot-v1_curves.png`) show all three
+modes occupying the same band for most of training and only separating near
+the end.
+
+What *is* resolved, and confirms the mechanism described in §3 directly, is the
+behaviour-policy entropy trace
+(`report/figures/ablation_scaling_Acrobot-v1_exploration.png`), where the three
+modes separate cleanly and stay separated:
+
+| mode | entropy at 100k (nats) | P(non-greedy) at 100k |
+|---|---|---|
+| `none` | ≈0.93 | ≈0.46 |
+| `running` | ≈0.38 | ≈0.15 |
+| `per_state` | ≈0.13 | ≈0.05 |
+
+`per_state` produces a policy that is **roughly 3× more confidently peaked**
+than `running` throughout the second half of training, and `none` never
+converges below the entropy it started near — exactly what §3 predicts: without
+normalisation the effective temperature keeps drifting as Q grows, so the
+policy never settles into a stable exploration level; with `per_state`
+normalisation every Q-row is forced to unit spread regardless of whether the
+row is genuinely decided, so the policy is confident almost everywhere.
+
+**This is a real result about the mechanism, and a candid limitation about the
+performance claim.** Going in, the expectation from §3 was that `per_state`'s
+false confidence on genuinely-flat Q-rows should *hurt* — but on Acrobot,
+where reward is dense (−1 every step until the goal) and confident early
+exploitation is not obviously wrong, the same mechanism that produces
+false confidence also produces less wasted exploration, and the point estimate
+favours it. Whether `per_state`'s failure mode actually costs performance
+likely depends on how many states in the environment have a genuinely flat
+Q-row — plausibly more on LunarLander, where several distinct actions can be
+similarly reasonable mid-flight, than on Acrobot's more decisive dynamics. That
+is a hypothesis this dataset does not have the seeds or the second environment
+to confirm; the honest conclusion is **the entropy mechanism is confirmed, the
+performance consequence is not resolved here**.
+
+### 8.2 Uncertainty-gated extension (Acrobot-v1, 100k steps)
+
+*(Completed once the `uncertainty` sweep finishes — see
+`results/summaries/uncertainty_table.md` for the numbers and
+`report/figures/uncertainty_*` for the figures, including the confidence trace
+that shows whether the measured signal actually moved and whether it moved the
+policy.)*
