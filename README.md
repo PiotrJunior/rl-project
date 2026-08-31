@@ -209,4 +209,5 @@ report/REPORT.md  the write-up
 
 ## Results
 
-See **[`report/REPORT.md`](report/REPORT.md)**.
+See **[`report/REPORT.md`](report/REPORT.md)** — or the Polish version,
+**[`report/RAPORT.md`](report/RAPORT.md)**, which tracks it section for section.

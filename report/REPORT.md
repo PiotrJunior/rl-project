@@ -2,6 +2,8 @@
 
 **RL course project — first iteration, OpenAI Gym environments.**
 
+*Polish version: [`RAPORT.md`](RAPORT.md) — same section numbering, same tables, same numbers.*
+
 ---
 
 ## 1. Problem
