@@ -105,3 +105,16 @@ def test_exploration_actually_differs_between_variants(tmp_path):
     greedy_like = mean_entropy("policy/topk_boltzmann")   # eps decays fast, k=2
     boltzmann = mean_entropy("policy/boltzmann")          # no eps floor at all
     assert abs(greedy_like - boltzmann) > 1e-3
+
+
+def test_ensemble_gating_with_one_head_is_rejected(tmp_path):
+    """A single-head 'ensemble' has identically zero disagreement, so the gated
+    policy would sit at confidence 0 and run as plain epsilon-greedy for the
+    whole sweep -- a config that looks fine and quietly tests the wrong thing.
+    """
+    import pytest
+
+    cfg = _config("policy/uncertainty_gated", tmp_path,
+                  extra=["agent.net.num_heads=1"])
+    with pytest.raises(ValueError, match="num_heads >= 2"):
+        train(cfg, tmp_path / "run")

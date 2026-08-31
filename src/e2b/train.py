@@ -113,11 +113,24 @@ def train(cfg: Config, run_dir: Path | None = None) -> dict[str, Any]:
 
     # The td_error signal is fed from the training loop rather than the acting
     # path, so it needs a handle here.
-    td_signal = (
-        policy.estimator
-        if needs_uncertainty and isinstance(getattr(policy, "estimator", None), TdErrorUncertainty)
-        else None
-    )
+    estimator = getattr(policy, "estimator", None) if needs_uncertainty else None
+    td_signal = estimator if isinstance(estimator, TdErrorUncertainty) else None
+
+    # Fail loudly on a configuration that would otherwise look fine and quietly
+    # test the wrong thing: ensemble disagreement across a single head is
+    # identically zero, so confidence would be pinned at 0 and the "adaptive"
+    # arm would run as plain epsilon-greedy for the whole sweep.
+    if (
+        estimator is not None
+        and estimator.name == "ensemble"
+        and cfg.agent.net.num_heads < 2
+    ):
+        raise ValueError(
+            "policy 'uncertainty_gated' with signal='ensemble' requires "
+            f"agent.net.num_heads >= 2, got {cfg.agent.net.num_heads}. "
+            "With one head the disagreement signal is identically zero and the "
+            "policy silently degenerates to epsilon-greedy."
+        )
 
     run_dir = Path(run_dir or Path(cfg.run.out_dir) / cfg.run_id)
     run_dir.mkdir(parents=True, exist_ok=True)
