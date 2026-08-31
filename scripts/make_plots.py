@@ -78,9 +78,16 @@ def results_table(arms, baseline_label: str | None) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sweep", required=True)
+    parser.add_argument("--titles", action="store_true",
+                        help="draw a title above each panel (off by default: "
+                             "the report and paper introduce every figure with "
+                             "a caption, so a title repeats it)")
     parser.add_argument("--runs-root", default=None)
     parser.add_argument("--fig-dir", default=str(ROOT / "report" / "figures"))
     args = parser.parse_args(argv)
+
+    from e2b import plotting
+    plotting.SHOW_TITLES = args.titles
 
     runs_root = Path(args.runs_root or ROOT / "results" / "runs" / args.sweep)
     arms = load_sweep(runs_root)

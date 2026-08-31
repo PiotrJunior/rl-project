@@ -41,10 +41,29 @@ PALETTE = [
     "#4a3aa7",  # violet
     "#e34948",  # red
 ]
-SURFACE = "#fcfcfb"
+SURFACE = "#ffffff"
 INK = "#0b0b0b"
 INK_SECONDARY = "#52514e"
 GRID = "#e4e3df"
+
+# Panel titles are off by default: in the paper and the report every figure is
+# introduced by a caption, and a title above the axes then says the same thing
+# twice. `scripts/make_plots.py --titles` puts them back for standalone viewing.
+SHOW_TITLES = False
+
+# Legends sit bottom-right on an opaque white box, so they stay readable even
+# where a curve passes underneath.
+LEGEND_STYLE = dict(
+    frameon=True, facecolor="white", framealpha=0.92, edgecolor="none",
+    fontsize=8.5, labelcolor=INK_SECONDARY,
+)
+
+# Fraction of the axes width occupied by data in plot_learning_curves, which
+# reserves a right-hand band for direct end-labels via ax.margins(x=X_MARGIN).
+# The legend is anchored to the right edge of the DATA, not of the axes, so it
+# never lands on top of an end-label.
+X_MARGIN = 0.26
+DATA_RIGHT = (1.0 + X_MARGIN) / (1.0 + 2.0 * X_MARGIN)
 
 # A stable arm -> slot mapping, so a variant is the same colour in every figure
 # even when a sweep contains a different subset of arms.
@@ -110,7 +129,7 @@ def _style_axes(ax, xlabel: str, ylabel: str, title: str | None = None) -> None:
     ax.tick_params(colors=INK_SECONDARY, labelsize=9)
     ax.set_xlabel(xlabel, color=INK_SECONDARY, fontsize=10)
     ax.set_ylabel(ylabel, color=INK_SECONDARY, fontsize=10)
-    if title:
+    if title and SHOW_TITLES:
         ax.set_title(title, color=INK, fontsize=12, loc="left", pad=10)
 
 
@@ -120,6 +139,26 @@ def _thousands(ax) -> None:
             lambda v, _: f"{v/1000:.0f}k" if v >= 1000 else f"{v:.0f}"
         )
     )
+
+
+def _bottom_right_legend(fig, ax, ncol_max: int = 4) -> None:
+    """Legend below the panels, flush right -- outside the data area.
+
+    Inside the axes a bottom-right legend lands on the curves in these stacked
+    figures: on the Q-scaling ablation it covered exactly the end-of-training
+    entropy levels the figure exists to show. Space for it is reserved from the
+    figure instead, so it can never occlude anything.
+    """
+    handles, labels = ax.get_legend_handles_labels()
+    if not handles:
+        fig.tight_layout()
+        return
+    ncol = min(ncol_max, len(handles))
+    rows = -(-len(handles) // ncol)
+    reserve = 0.042 * rows + 0.015
+    fig.tight_layout(rect=(0.0, reserve, 1.0, 1.0))
+    fig.legend(handles, labels, loc="lower right", bbox_to_anchor=(0.995, 0.006),
+               ncol=ncol, columnspacing=1.6, **LEGEND_STYLE)
 
 
 def _spread_labels(values: list[float], min_gap: float) -> list[float]:
@@ -157,7 +196,7 @@ def plot_learning_curves(
 
     _style_axes(ax, "Environment steps", ylabel, title)
     _thousands(ax)
-    ax.margins(x=0.26)
+    ax.margins(x=X_MARGIN)
 
     # Direct end-labels: identity must never rest on colour alone. Placed after
     # the axes are scaled so the minimum gap is in real data units.
@@ -168,8 +207,9 @@ def plot_learning_curves(
         ax.annotate(label, xy=(x_end, y), xytext=(8, 0), textcoords="offset points",
                     color=colour, fontsize=8.5, va="center")
 
-    ax.legend(frameon=False, fontsize=8.5, loc="lower left", labelcolor=INK_SECONDARY,
-              ncol=2, columnspacing=1.2)
+    ax.legend(loc="lower right", bbox_to_anchor=(DATA_RIGHT, 0.0),
+              bbox_transform=ax.transAxes, ncol=2, columnspacing=1.2,
+              **LEGEND_STYLE)
     fig.tight_layout()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, facecolor=SURFACE)
@@ -258,10 +298,10 @@ def plot_exploration_diagnostics(
         _style_axes(ax, "", ylabel)
         _thousands(ax)
 
-    axes[0].set_title(title, color=INK, fontsize=12, loc="left", pad=10)
+    if SHOW_TITLES:
+        axes[0].set_title(title, color=INK, fontsize=12, loc="left", pad=10)
     axes[-1].set_xlabel("Environment steps", color=INK_SECONDARY, fontsize=10)
-    axes[0].legend(frameon=False, fontsize=8.5, ncol=2, labelcolor=INK_SECONDARY)
-    fig.tight_layout()
+    _bottom_right_legend(fig, axes[0])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
@@ -305,10 +345,10 @@ def plot_knob_traces(arms: list[ArmResults], out_path: Path, title: str) -> Path
         _style_axes(ax, "", ylabel)
         _thousands(ax)
 
-    axes[0].set_title(title, color=INK, fontsize=12, loc="left", pad=10)
+    if SHOW_TITLES:
+        axes[0].set_title(title, color=INK, fontsize=12, loc="left", pad=10)
     axes[-1].set_xlabel("Environment steps", color=INK_SECONDARY, fontsize=10)
-    axes[0].legend(frameon=False, fontsize=8.5, ncol=2, labelcolor=INK_SECONDARY)
-    fig.tight_layout()
+    _bottom_right_legend(fig, axes[0])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
@@ -346,8 +386,7 @@ def plot_confidence_trace(arms: list[ArmResults], out_path: Path, title: str) ->
     _style_axes(axes[1], "Environment steps", "Induced support size k")
     for ax in axes:
         _thousands(ax)
-    axes[0].legend(frameon=False, fontsize=8.5, labelcolor=INK_SECONDARY)
-    fig.tight_layout()
+    _bottom_right_legend(fig, axes[0])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_path, dpi=150, facecolor=SURFACE)
     plt.close(fig)
