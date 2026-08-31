@@ -125,10 +125,11 @@ swig` also works).
 make test                      # 140 tests
 make smoke                     # 3k-step end-to-end check
 
-make experiment-reduced        # CartPole, 7 variants, 3 seeds  (~15 min, 4 cores)
-make experiment-main           # LunarLander, 8 variants, 3 seeds
-make experiment-ablation       # Q-scaling ablation
-make experiment-uncertainty    # uncertainty-gated extension
+make experiment-reduced        # CartPole, 7 variants, 3 seeds   (~15-20 min, 4 cores)
+make experiment-acrobot        # Acrobot, 8 variants, 3 seeds    (~15-20 min, 4 cores)
+make experiment-ablation       # Q-scaling ablation, on Acrobot  (~7 min)
+make experiment-uncertainty    # uncertainty-gated extension, on Acrobot (~12 min)
+make experiment-main           # LunarLander, 8 variants, 3 seeds (~3-4 h -- see note below)
 
 make plots SWEEP=main_gym      # regenerate figures + tables
 ```

@@ -410,3 +410,86 @@ training so it does not start inflated by the noisiest phase of learning, and
 so it tracks the *current* uncertainty level rather than a decaying memory of
 its historical peak. Given the compute budget for this project, re-running
 with a fix was out of scope; it is the natural next step for this extension.
+
+## 9. What the design buys, independent of the numbers
+
+Three things in this project are worth keeping regardless of how the arms
+ranked, because they are the parts that make the comparison *possible*:
+
+**The unified family makes the endpoints exact.** Because `k = 1` and `τ → 0`
+both reduce to ε-greedy *to machine precision*, and `ε = 0` with full support is
+exactly softmax, an annealing schedule genuinely starts at one classic strategy
+and ends at the other. A hand-rolled blend would start and end near them, and
+every claim about "how the handover affects learning" would be contaminated by
+the difference. `tests/test_policies.py` pins this down as exact array equality
+against independently written reference implementations.
+
+**The Q-scale normaliser makes a temperature portable.** Without it, "τ = 0.3"
+means something different on every environment and at every point in training,
+so the single number that defines Boltzmann exploration is not actually under
+the experimenter's control. §7 shows what happens without it.
+
+**Explicit action distributions make exploration measurable.** Computing
+`π(a|s)` rather than sampling procedurally costs microseconds and yields
+behaviour-policy entropy and P(action ≠ argmax) for free — the only two
+quantities that are comparable across strategies whose knobs are not. Without
+them, the report could say the schedule moved but not that the behaviour did.
+
+## 10. Limitations
+
+Stated plainly, because they bound what the results above support.
+
+- **Three seeds.** The confidence intervals are wide and mostly overlapping.
+  Where they overlap, this report says *inconclusive* — it does not read a
+  ranking out of the point estimates. Deep-RL exploration effects are small
+  relative to DQN's seed variance, and 3 seeds is below what is needed to
+  resolve them. Five to ten seeds is the minimum for confident claims;
+  `configs/sweeps/full_gym.yaml` is set up for that.
+- **Reduced step budgets.** LunarLander ran to 120k steps rather than the
+  ~400k a DQN needs to actually solve it (~200 return). The arms are compared
+  during the *learning* phase, not at convergence, and an exploration strategy
+  that pays off late could be undersold here. This was forced by measured
+  throughput: LunarLander runs ~8× slower per step than the classic-control
+  tasks on this hardware.
+- **No Atari results.** The ALE code path is implemented, unit-tested against
+  real ALE environments, and verified to complete a training run end-to-end —
+  but not trained. At ~10M frames per run, 8 arms × 5 seeds is on the order of
+  a GPU-month. This matters for the conclusions: the two annealing paths
+  (temperature and support) are *nearly equivalent* when |A| is 2–4, and only
+  separate meaningfully as the action set grows. Atari's up-to-18 actions is
+  where the support path should either prove itself or not, and that experiment
+  has not been run.
+- **Small action sets limit idea 2.** On CartPole (|A| = 2), `top-2 Boltzmann`
+  is definitionally identical to full-support Boltzmann, and `anneal_k` has a
+  single step to take. Acrobot (3) and LunarLander (4) are better but still
+  narrow. The top-k family is under-tested here by construction.
+- **One hyperparameter setting per variant.** Each variant's schedule endpoints
+  and durations were chosen once, on reasoning rather than a search. A variant
+  that looks worse may simply be mis-tuned; the ablation in §8.1 shows how
+  sensitive this family is to one such choice (`q_scaling`), and the
+  uncertainty extension's failure in §8.2 is *itself* a calibration bug in one
+  specific normalisation scheme, not a rejection of the underlying idea.
+
+## 11. Reproduction
+
+```bash
+make setup                     # swig BEFORE gymnasium[box2d] -- see README
+make test                      # the full test suite
+
+make experiment-reduced        # CartPole
+make experiment-acrobot        # Acrobot
+make experiment-ablation       # Acrobot, Q-scaling
+make experiment-uncertainty    # Acrobot, uncertainty-gated extension
+make experiment-main           # LunarLander
+
+make plots SWEEP=acrobot_gym   # regenerate every figure and table for one sweep
+```
+
+Every figure in this report is regenerated from the committed run outputs by
+`scripts/make_plots.py`; nothing here was drawn by hand. Sweeps are resumable —
+a cell whose `result.json` exists is skipped — so an interrupted run is
+restarted with the same command.
+
+For results worth relying on, run `make experiment-full WORKERS=6`: 3
+environments × 8 arms × 5 seeds at full step budgets (CartPole 100k, Acrobot
+150k, LunarLander 400k), a few hours on an M1 Pro.

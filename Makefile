@@ -2,18 +2,21 @@ PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 WORKERS ?= 4
 
-.PHONY: help venv setup test smoke experiment-reduced experiment-main \
-        experiment-ablation experiment-uncertainty experiment-full plots clean
+.PHONY: help venv setup test smoke experiment-reduced experiment-acrobot \
+        experiment-main experiment-ablation experiment-uncertainty \
+        experiment-full plots clean
 
 help:
 	@echo "make setup                 create .venv and install dependencies"
 	@echo "make test                  run the test suite"
 	@echo "make smoke                 3k-step end-to-end run on CartPole"
-	@echo "make experiment-reduced    CartPole, all variants, 3 seeds (~15 min on 4 cores)"
-	@echo "make experiment-main       LunarLander, all variants, 3 seeds (~1.5 h on 4 cores)"
-	@echo "make experiment-ablation   Q-scaling ablation on LunarLander"
-	@echo "make experiment-uncertainty  uncertainty-gated extension study"
-	@echo "make experiment-full       full study: 3 envs x 8 arms x 5 seeds"
+	@echo "make experiment-reduced    CartPole, all variants, 3 seeds (~15-20 min on 4 cores)"
+	@echo "make experiment-acrobot    Acrobot, all variants, 3 seeds (~15-20 min on 4 cores)"
+	@echo "make experiment-main       LunarLander, all variants, 3 seeds (~3-4 h on 4 cores --"
+	@echo "                           LunarLander runs ~8x slower per step than classic control)"
+	@echo "make experiment-ablation   Q-scaling ablation on Acrobot (~7 min)"
+	@echo "make experiment-uncertainty  uncertainty-gated extension study on Acrobot (~12 min)"
+	@echo "make experiment-full       full study: 3 envs x 8 arms x 5 seeds, full step budgets"
 	@echo "make plots SWEEP=main_gym  regenerate figures and tables for one sweep"
 	@echo ""
 	@echo "Override parallelism with WORKERS=N (default 4)."
@@ -39,6 +42,10 @@ smoke:
 experiment-reduced:
 	PYTHONPATH=src $(PY) scripts/run_sweep.py --sweep reduced_gym --workers $(WORKERS)
 	$(MAKE) plots SWEEP=reduced_gym
+
+experiment-acrobot:
+	PYTHONPATH=src $(PY) scripts/run_sweep.py --sweep acrobot_gym --workers $(WORKERS)
+	$(MAKE) plots SWEEP=acrobot_gym
 
 experiment-main:
 	PYTHONPATH=src $(PY) scripts/run_sweep.py --sweep main_gym --workers $(WORKERS)
