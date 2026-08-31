@@ -11,6 +11,11 @@ from e2b.nets import build_qnetwork
 
 
 def make_agent(**net_kwargs):
+    # Seed torch too, not just the agent's numpy stream: network initialisation
+    # comes from torch's global RNG, so without this the agent under test is a
+    # different network on every run. That made
+    # test_learn_runs_and_reduces_loss_on_a_fixed_batch flaky (~1 run in 5).
+    torch.manual_seed(0)
     cfg = AgentConfig(
         batch_size=8, learning_starts=8, target_update_interval=10**9,
         net=NetConfig(hidden_sizes=(16,), **net_kwargs),

@@ -108,8 +108,11 @@ shared, and unknown keys are rejected rather than ignored).
 ## Install
 
 ```bash
-make setup
+make setup                     # or: make setup PYTHON=python3.12
 ```
+
+**Python 3.10+ is required** — config loading resolves `X | None` annotations at
+runtime. macOS still ships 3.9 as `python3`, so pass `PYTHON=` explicitly there.
 
 `swig` **must** be installed before `gymnasium[box2d]` — `box2d-py` has no
 prebuilt wheels for CPython 3.11+ on linux-x86_64 or macOS-arm64, so it compiles
@@ -122,17 +125,22 @@ swig` also works).
 ## Reproduce
 
 ```bash
-make test                      # 140 tests
+make test                      # 187 tests
 make smoke                     # 3k-step end-to-end check
 
-make experiment-reduced        # CartPole, 7 variants, 3 seeds   (~15-20 min, 4 cores)
-make experiment-acrobot        # Acrobot, 8 variants, 3 seeds    (~15-20 min, 4 cores)
-make experiment-ablation       # Q-scaling ablation, on Acrobot  (~7 min)
-make experiment-uncertainty    # uncertainty-gated extension, on Acrobot (~12 min)
-make experiment-main           # LunarLander, 8 variants, 3 seeds, full 400k budget (~1 h)
+make experiment-full           # THE study: 3 envs x 8 arms x 5 seeds  (~35 min, 8 workers)
 
-make plots SWEEP=main_gym      # regenerate figures + tables
+make experiment-reduced        # CartPole, 7 variants, 3 seeds    (~2 min)
+make experiment-acrobot        # Acrobot, 8 variants, 3 seeds     (~3 min)
+make experiment-ablation       # Q-scaling ablation, on Acrobot   (~2 min)
+make experiment-uncertainty    # uncertainty-gated extension      (~3 min)
+make experiment-main           # LunarLander, 8 variants, 3 seeds (~12 min)
+
+make plots SWEEP=full_gym      # regenerate figures + tables
 ```
+
+Timings are measured on an **Apple M1 Pro (10 cores, CPU only)** with
+`WORKERS=8` — the machine every number in the report was produced on.
 
 Sweeps are **resumable**: a run whose `result.json` already exists is skipped,
 so an interrupted sweep is restarted by re-running the same command. Each worker
@@ -141,11 +149,12 @@ core and the sweep runs slower than serial.
 
 ### Full-scale run
 
-`make experiment-full WORKERS=6` runs 3 environments × 8 variants × 5 seeds at
-full step budgets (CartPole 100k, Acrobot 150k, LunarLander 400k). On an M1 Pro
-with 6 workers this is a few hours. The reported numbers in `report/REPORT.md`
-come from the reduced 3-seed sweeps that fit this project's compute budget; the
-full sweep is the configuration to use for conclusions you want to rely on.
+`make experiment-full WORKERS=8` runs 3 environments × 8 variants × 5 seeds at
+full step budgets (CartPole 100k, Acrobot 150k, LunarLander 400k): 120 runs,
+26.0M environment steps, **35 minutes wall-clock** on an M1 Pro. This is the
+sweep §7 of the report is written from. The reduced 3-seed sweeps are kept
+because §6.2 uses them to show, by re-running them on a second machine, that a
+3-seed ranking in this family does not survive a change of BLAS library.
 
 Device note: `run.device: auto` resolves to **CPU** for the MLP experiments on
 purpose. With two-layer MLPs at batch 64, per-kernel dispatch overhead dominates
@@ -192,7 +201,7 @@ src/e2b/
   analysis.py     IQM + stratified bootstrap CIs
   plotting.py     figures
 scripts/          run_sweep.py, make_plots.py
-tests/            140 tests
+tests/            187 tests
 report/REPORT.md  the write-up
 ```
 

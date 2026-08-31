@@ -21,6 +21,23 @@ trustworthy.
 
 This project asks **how** to make that transfer, and measures whether it helps.
 
+The measured answer (§7.1) is that the premise above is **conditional, and its
+sign flips between environments**. Dropping the ε floor entirely is decisively
+worse than ε-greedy on CartPole (`P = 0.04 [0.00, 0.24]`) and decisively
+*better* on LunarLander (`P = 0.92 [0.68, 1.00]`) — the two intervals sit either
+side of 0.5 and neither contains it. The ε floor is insurance against an
+uninformative Q, and it is worth its premium only where the premium — the cost
+of a uniformly random action — is low. On CartPole a random action is nearly
+free; on LunarLander it fires thrusters at random and crashes the lander.
+
+### Summary of findings
+
+| | result |
+|---|---|
+| **Resolved** (interval excludes 0.5) | The ε-floor's value reverses sign between CartPole and LunarLander (§7.1). The support path `anneal_k` beats ε-greedy on Acrobot final return, `P = 0.96 [0.76, 1.00]` (§7.2). |
+| **Resolved** (replicated on two machines) | Q-scale normalisation controls where the behaviour policy's entropy settles, and `none` never settles at all (§8.1). Both uncertainty-gated arms collapse, `P = 0.00`, attributable to the gate and not the ensemble architecture (§8.2). |
+| **Not resolved** | Any ranking among the ε-floor variants on CartPole or LunarLander. Whether `per_state` Q-scaling costs performance. §6.2 shows a 3-seed ranking here does not survive a change of BLAS library. |
+
 ## 2. Method: one policy family, several paths through it
 
 The design decision that organises everything here is to refuse to treat
@@ -472,24 +489,38 @@ finding about this scheme's calibration rather than a mystery:
    and raw uncertainty (TD error, ensemble disagreement) is largest early,
    when the network is least trained. The instant warm-up ends, current
    uncertainty is compared against that inflated reference and confidence
-   spikes to ≈0.85 (TD-error signal) or ≈0.35 (ensemble) within a few thousand
-   steps — briefly pushing the policy toward near-Boltzmann (`k` up to 3) on a
+   spikes to 0.83 (TD-error signal) or 0.33 (ensemble) within 2k steps — briefly pushing the policy toward near-Boltzmann (`k` up to 3) on a
    network that has had only ~2,000 gradient steps. This is precisely the bad
    combination the warm-up guard was designed to prevent (§4), except the
    guard only pins confidence *during* warm-up and does nothing about the
    transient the moment it ends.
-2. **The reference then overcorrects and stays there.** As the slow stochastic
-   quantile tracker (`RunningQuantile`, lr = 0.01) chases the now-lower signal
-   down, the *reference* keeps shrinking too, so confidence decays back
-   towards ≈0.15–0.2 (ensemble) / ≈0.05 (TD-error) and **stays there for the
-   rest of the 100k-step run** — it never recovers. With
-   `eps_uncertain = 1.0, eps_confident = 0.01`, a steady-state confidence of
-   0.2 interpolates to `ε ≈ 0.80`. The knob trace confirms this directly: both
-   gated arms sit at `ε ≈ 0.75–0.95` for effectively the entire run, while
-   every fixed-schedule arm has decayed to `ε ≤ 0.05` by 30k steps. The gated
-   policy spends nearly this whole budget more exploratory than *any* other
-   arm in the study, which is a straightforward, sufficient explanation for
-   why it learns slower within a fixed 100k-step budget.
+2. **Confidence then flatlines far too low, and never recovers.** The two
+   signals fail differently, but both fail:
+
+   | step | 5k | 10k | 12k | 20k | 50k | 100k |
+   |---|---|---|---|---|---|---|
+   | confidence (ensemble) | 0.00 | 0.00 | **0.33** | 0.34 | 0.31 | 0.26 |
+   | ε (ensemble) | 1.00 | 1.00 | 0.67 | 0.67 | 0.69 | 0.74 |
+   | confidence (TD-error) | 0.00 | 0.00 | **0.83** | 0.28 | 0.04 | 0.04 |
+   | ε (TD-error) | 1.00 | 1.00 | 0.18 | 0.73 | **0.96** | 0.96 |
+
+   The **TD-error** arm overcorrects: the slow stochastic quantile tracker
+   (`RunningQuantile`, lr = 0.01) chases the falling signal down, the reference
+   shrinks with it, and confidence collapses to 0.04 by 50k and stays there —
+   `ε ≈ 0.96` for the second half of the run. The **ensemble** arm does not
+   overcorrect; it simply *plateaus* at confidence ≈ 0.3, which is the more
+   damaging failure because it looks stable. With
+   `eps_uncertain = 1.0, eps_confident = 0.01`, confidence 0.3 interpolates to
+   `ε = 0.70` exactly as observed — the gate is working as specified and the
+   specification is wrong.
+
+   Either way both gated arms sit between `ε ≈ 0.67` and `ε ≈ 0.96` for
+   effectively the entire run, while every fixed-schedule arm has decayed to
+   `ε ≤ 0.05` by 30k steps. The gated policy spends nearly the whole budget
+   more exploratory than *any* other arm in the study. That is a sufficient
+   explanation for the collapse on its own, and it means the arms never got to
+   test the hypothesis they were built for: **the handover the extension exists
+   to trigger essentially never fires.**
 
 This is **not evidence against uncertainty-gated exploration as an idea** — it
 is evidence that mapping a *relative* confidence signal onto absolute (ε, τ, k)
@@ -532,61 +563,76 @@ them, the report could say the schedule moved but not that the behaviour did.
 
 Stated plainly, because they bound what the results above support.
 
-- **Three seeds.** The confidence intervals are wide and mostly overlapping.
-  Where they overlap, this report says *inconclusive* — it does not read a
-  ranking out of the point estimates. Deep-RL exploration effects are small
-  relative to DQN's seed variance, and 3 seeds is below what is needed to
-  resolve them. Five to ten seeds is the minimum for confident claims;
-  `configs/sweeps/full_gym.yaml` is set up for that.
-- **Reduced step budgets on CartPole and Acrobot.** The main comparison ran
-  CartPole to 60k steps and Acrobot to 100k, both below their `configs/env/`
-  full defaults (100k / 150k). An exploration strategy that pays off later in
-  training than these budgets cover could be undersold on these two
-  environments.
-- **No LunarLander results.** `configs/sweeps/main_gym.yaml` runs the full
-  400k-step budget and is validated by `tests/test_sweeps.py`, but was not
-  executed as part of this report — see §6.1. LunarLander is the environment
-  the project brief names first, so this is the most consequential gap here;
-  `make experiment-main` produces it directly.
+- **Five seeds is enough for a sign reversal and not much else.** §7.1's
+  ε-floor result and §7.2's support-path win are the only two comparisons whose
+  probability-of-improvement intervals exclude 0.5. Every other ranking in §7 is
+  a point estimate, and §6.2 demonstrates empirically what happens if you trust
+  one at 3 seeds: the ordering does not survive a change of BLAS library. Ten to
+  thirty seeds is what the deep-RL evaluation literature asks for; this study
+  has five.
+- **The §8 studies are still at 3 seeds.** The Q-scaling ablation and the
+  uncertainty extension were not re-run at 5. Their *performance* columns are
+  correspondingly weak — §8.1 says so explicitly. Their load-bearing claims are
+  the entropy mechanism and the gating collapse, both of which replicated across
+  two machines (§6.2), which is a different and stronger kind of evidence than a
+  3-seed ranking.
 - **No Atari results.** The ALE code path is implemented, unit-tested against
   real ALE environments, and verified to complete a training run end-to-end —
   but not trained. At ~10M frames per run, 8 arms × 5 seeds is on the order of
-  a GPU-month. This matters for the conclusions: the two annealing paths
-  (temperature and support) are *nearly equivalent* when |A| is 2–4, and only
-  separate meaningfully as the action set grows. Atari's up-to-18 actions is
-  where the support path should either prove itself or not, and that experiment
-  has not been run.
-- **Small action sets limit idea 2.** On CartPole (|A| = 2), `top-2 Boltzmann`
-  is definitionally identical to full-support Boltzmann, and `anneal_k` has a
-  single step to take. Acrobot (3) and LunarLander (4) are better but still
-  narrow. The top-k family is under-tested here by construction.
+  a GPU-month. This matters directly for §7.1's conclusion: the mechanism it
+  identifies — the ε floor is worth its premium only when a uniformly random
+  action is cheap — predicts that the effect should *grow* with the action set,
+  and Atari's up-to-18 actions is where that prediction would be tested. It has
+  not been.
+- **Small action sets limit idea 2.** On CartPole (|A| = 2) `top-2` and `top-3`
+  Boltzmann are provably the same policy, and the §7 table confirms it to the
+  last decimal on all 5 seeds. `anneal_k` has one step to take. Acrobot (3) and
+  LunarLander (4) are better but still narrow — and §7.2's single resolved
+  support-path win is on Acrobot, the environment where |A| first makes the
+  variant non-trivial. That is suggestive, not conclusive.
+- **Three environments, all dense-reward and low-dimensional.** The §7.1
+  mechanism is about the *cost of a random action*, which these three happen to
+  span usefully (free on CartPole, fatal on LunarLander). They do not span
+  sparse reward, long horizons, or pixel observations at all.
 - **One hyperparameter setting per variant.** Each variant's schedule endpoints
   and durations were chosen once, on reasoning rather than a search. A variant
-  that looks worse may simply be mis-tuned; the ablation in §8.1 shows how
-  sensitive this family is to one such choice (`q_scaling`), and the
-  uncertainty extension's failure in §8.2 is *itself* a calibration bug in one
-  specific normalisation scheme, not a rejection of the underlying idea.
+  that looks worse may simply be mis-tuned. §8.1 shows how sensitive this family
+  is to a single such choice (`q_scaling`), and §8.2's failure is *itself* a
+  calibration bug in one specific normalisation scheme rather than a refutation
+  of uncertainty-gated exploration.
+- **Evaluation is greedy only.** Every number is the greedy policy's return.
+  This is the right choice for comparing learning quality across arms (§6), but
+  it means the report says nothing about the online return an agent would
+  actually collect while exploring — which for a deployed system is often the
+  quantity that matters.
 
 ## 11. Reproduction
 
 ```bash
 make setup                     # swig BEFORE gymnasium[box2d] -- see README
-make test                      # the full test suite
+make test                      # 187 tests
 
-make experiment-reduced        # CartPole
-make experiment-acrobot        # Acrobot
-make experiment-ablation       # Acrobot, Q-scaling
-make experiment-uncertainty    # Acrobot, uncertainty-gated extension
-make experiment-main           # LunarLander
+make experiment-full           # THE study in §7: 3 envs x 8 arms x 5 seeds
+make experiment-ablation       # §8.1  Acrobot, Q-scaling
+make experiment-uncertainty    # §8.2  Acrobot, uncertainty-gated extension
 
-make plots SWEEP=acrobot_gym   # regenerate every figure and table for one sweep
+make plots SWEEP=full_gym      # regenerate every figure and table for one sweep
 ```
 
-Every figure in this report is regenerated from the committed run outputs by
+`make experiment-full WORKERS=8` reproduces §7 end to end: 120 runs, 26.0M
+environment steps, **35 minutes wall-clock on an M1 Pro** (4.6 h of summed
+worker time). The three reduced 3-seed sweeps (`experiment-reduced`,
+`experiment-acrobot`, `experiment-main`) are retained for §6.2's cross-machine
+comparison and run in under 20 minutes together.
+
+Every figure in this report is regenerated from run outputs by
 `scripts/make_plots.py`; nothing here was drawn by hand. Sweeps are resumable —
 a cell whose `result.json` exists is skipped — so an interrupted run is
 restarted with the same command.
 
-For results worth relying on, run `make experiment-full WORKERS=6`: 3
-environments × 8 arms × 5 seeds at full step budgets (CartPole 100k, Acrobot
-150k, LunarLander 400k), a few hours on an M1 Pro.
+**On exact reproducibility:** individual runs are deterministic per seed *on a
+fixed machine and library stack* — §7's CartPole table shows `top-2` and `top-3`
+agreeing to the last decimal across all 5 seeds. They are **not** reproducible
+across torch/BLAS builds; §6.2 quantifies how far the aggregate rankings move.
+This is normal for deep RL and is the reason this report reports intervals and
+probabilities rather than point estimates.

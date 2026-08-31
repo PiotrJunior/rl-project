@@ -2,6 +2,12 @@ PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 WORKERS ?= 4
 
+# Interpreter used to CREATE the venv. Needs >= 3.10: config loading resolves
+# `X | None` annotations at runtime via get_type_hints. macOS ships 3.9 as
+# `python3`, so override this if `make setup` fails on the venv step:
+#   make setup PYTHON=python3.12
+PYTHON ?= python3
+
 .PHONY: help venv setup test smoke experiment-reduced experiment-acrobot \
         experiment-main experiment-ablation experiment-uncertainty \
         experiment-full plots clean
@@ -10,18 +16,18 @@ help:
 	@echo "make setup                 create .venv and install dependencies"
 	@echo "make test                  run the test suite"
 	@echo "make smoke                 3k-step end-to-end run on CartPole"
-	@echo "make experiment-reduced    CartPole, all variants, 3 seeds (~15-20 min on 4 cores)"
-	@echo "make experiment-acrobot    Acrobot, all variants, 3 seeds (~15-20 min on 4 cores)"
-	@echo "make experiment-main       LunarLander, all variants, 3 seeds, full 400k budget (~1 h on 4 cores)"
-	@echo "make experiment-ablation   Q-scaling ablation on Acrobot (~7 min)"
-	@echo "make experiment-uncertainty  uncertainty-gated extension study on Acrobot (~12 min)"
-	@echo "make experiment-full       full study: 3 envs x 8 arms x 5 seeds, full step budgets"
-	@echo "make plots SWEEP=main_gym  regenerate figures and tables for one sweep"
+	@echo "make experiment-reduced    CartPole, all variants, 3 seeds (~2 min, WORKERS=8)"
+	@echo "make experiment-acrobot    Acrobot, all variants, 3 seeds (~3 min, WORKERS=8)"
+	@echo "make experiment-main       LunarLander, all variants, 3 seeds, full 400k budget (~12 min, WORKERS=8)"
+	@echo "make experiment-ablation   Q-scaling ablation on Acrobot (~2 min)"
+	@echo "make experiment-uncertainty  uncertainty-gated extension study on Acrobot (~3 min)"
+	@echo "make experiment-full       THE study: 3 envs x 8 arms x 5 seeds (~35 min, WORKERS=8)"
+	@echo "make plots SWEEP=full_gym  regenerate figures and tables for one sweep"
 	@echo ""
-	@echo "Override parallelism with WORKERS=N (default 4)."
+	@echo "Override parallelism with WORKERS=N (default 4; timings above assume 8)."
 
 venv:
-	python3 -m venv .venv
+	$(PYTHON) -m venv .venv
 	$(PIP) install --upgrade pip
 
 # swig MUST be installed before gymnasium[box2d]: box2d-py has no prebuilt
