@@ -1,0 +1,31 @@
+# Secondary main study on Acrobot-v1.
+#
+# Acrobot earns its place for two reasons beyond being cheap (classic control,
+# no Box2D, ~8x faster per step than LunarLander on CPU):
+#  - 3 actions, so top-k exploration has a real choice to make (k=2 is strictly
+#    between greedy and full Boltzmann), unlike CartPole's 2;
+#  - its return scale (-500..-70) is completely unlike CartPole's (0..500),
+#    which is exactly what exercises the Q-scale normalisation. A temperature
+#    that works on both without retuning is the claim being tested.
+base: base
+out_dir: results/runs/acrobot_gym
+envs: [env/acrobot]
+policies:
+  - policy/eps_greedy
+  - policy/boltzmann
+  - policy/eps_boltzmann
+  - policy/mixture_anneal
+  - policy/topk_boltzmann
+  - policy/topk3_boltzmann
+  - policy/anneal_k
+  - policy/topp_boltzmann
+seeds: [0, 1, 2]
+overrides:
+  train:
+    total_steps: 100000
+    eval_interval: 10000
+    eval_episodes: 10
+    diagnostics_interval: 2000
+  agent:
+    learning_starts: 2000
+    replay: {capacity: 100000}

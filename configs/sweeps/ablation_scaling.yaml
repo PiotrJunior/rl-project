@@ -1,22 +1,25 @@
 # ABLATION: does Q-value scale normalisation matter, and which mode?
-# Identical schedules in all three arms -- only `q_scaling` differs.
+# Identical schedules in all three arms -- ONLY `q_scaling` differs.
+#
+# Run on Acrobot-v1 rather than LunarLander for cost, and because Acrobot is
+# the better test: its return scale (-500..-70) is nothing like the scale the
+# temperature was chosen against, which is precisely the situation the
+# normalisation exists to handle.
 base: base
 out_dir: results/runs/ablation_scaling
-envs: [env/lunarlander]
-policies:
-  - policy/eps_boltzmann          # running  (default)
-  - policy/eps_boltzmann_none     # none
-  - policy/eps_boltzmann_perstate # per_state
-seeds: [0, 1, 2]
+envs: [env/acrobot]
+policies: []
 arms:
   - {policy: policy/eps_boltzmann,          label: scaling_running}
   - {policy: policy/eps_boltzmann_none,     label: scaling_none}
   - {policy: policy/eps_boltzmann_perstate, label: scaling_per_state}
+seeds: [0, 1, 2]
 overrides:
   train:
-    total_steps: 250000
-    eval_interval: 12500
+    total_steps: 100000
+    eval_interval: 10000
     eval_episodes: 10
-    diagnostics_interval: 2500
+    diagnostics_interval: 2000
   agent:
-    replay: {capacity: 150000}
+    learning_starts: 2000
+    replay: {capacity: 100000}

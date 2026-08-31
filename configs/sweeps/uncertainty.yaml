@@ -1,14 +1,22 @@
 # EXTENSION study: uncertainty-gated handover.
 #
 # The control arm is the crux. `eps_greedy_ensemble` runs plain epsilon-greedy
-# with the SAME 5-head bootstrapped architecture as the gated arms, so that any
-# difference is attributable to the gating rather than to the ensemble's effect
-# on value learning. A single-head epsilon-greedy arm is included too, to
-# quantify what the architecture change alone does.
+# with the SAME 5-head bootstrapped architecture as the gated arm, so that any
+# difference is attributable to the GATING rather than to the ensemble's effect
+# on value learning -- bootstrapped heads change how the value function is
+# fitted, not just how uncertainty is measured. A single-head epsilon-greedy arm
+# is included as well, to quantify what the architecture change alone does.
+#
+# Comparing `gated_ensemble` (per-state signal) against `gated_td_error`
+# (global signal) isolates the value of per-state resolution from the value of
+# adaptive timing.
+#
+# On Acrobot-v1 for cost; the ensemble arms carry 5 heads and are ~2x slower
+# per step than the single-head arms.
 base: base
 out_dir: results/runs/uncertainty
-envs: [env/lunarlander]
-policies: []          # `arms` is used instead, to pair policies with architectures
+envs: [env/acrobot]
+policies: []
 arms:
   - label: eps_greedy_single
     policy: policy/eps_greedy
@@ -16,7 +24,7 @@ arms:
   - label: eps_greedy_ensemble          # <- the matched control
     policy: policy/eps_greedy_ensemble
     overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
-  - label: eps_boltzmann_ensemble       # best fixed schedule, matched arch
+  - label: eps_boltzmann_ensemble       # best fixed schedule, matched architecture
     policy: policy/eps_boltzmann
     overrides: {agent: {net: {num_heads: 5, bootstrap_prob: 0.8}}}
   - label: gated_ensemble
@@ -28,9 +36,10 @@ arms:
 seeds: [0, 1, 2]
 overrides:
   train:
-    total_steps: 250000
-    eval_interval: 12500
+    total_steps: 100000
+    eval_interval: 10000
     eval_episodes: 10
-    diagnostics_interval: 2500
+    diagnostics_interval: 2000
   agent:
-    replay: {capacity: 150000}
+    learning_starts: 2000
+    replay: {capacity: 100000}

@@ -1,9 +1,15 @@
-# MAIN study on LunarLander -- the environment the project brief names.
-# 4 actions is the smallest count at which top-k exploration has a real choice
-# (k = 2 and k = 3 are both strictly between greedy and full Boltzmann).
+# HEADLINE study on LunarLander-v3 -- the environment the project brief names.
+# 4 actions is the smallest count at which top-k exploration has two distinct
+# non-trivial settings (k = 2 and k = 3).
 #
-# Cost: 8 arms x 3 seeds x 250k steps. ~10 min per run at ~400 steps/s, so
-# ~4 CPU-hours total, or ~1 hour wall-clock on 4 workers.
+# Budget note: LunarLander runs at ~50 env-steps/s per worker on this 4-core
+# CPU box -- roughly 8x slower per step than the classic-control tasks, because
+# Box2D contact solving dominates. The step budget and evaluation frequency
+# below are set so this sweep completes in ~3 h on 4 workers rather than ~8 h.
+# 120k steps is enough for LunarLander DQN to get well clear of the crash-
+# immediately regime and to separate the arms, but NOT enough to solve the task
+# (~200 return); see the limitations section of the report. `full_gym.yaml`
+# carries the full 400k budget for a machine that can afford it.
 base: base
 out_dir: results/runs/main_gym
 envs: [env/lunarlander]
@@ -19,9 +25,14 @@ policies:
 seeds: [0, 1, 2]
 overrides:
   train:
-    total_steps: 250000
-    eval_interval: 12500
-    eval_episodes: 10
-    diagnostics_interval: 2500
+    total_steps: 120000
+    eval_interval: 15000
+    # 5 episodes rather than 10: on LunarLander an evaluation episode can run
+    # 1000 steps, so evaluation is a material fraction of total cost here in a
+    # way it is not on classic control. This is the largest saving available
+    # that does not touch the training signal itself.
+    eval_episodes: 5
+    diagnostics_interval: 2000
   agent:
-    replay: {capacity: 150000}
+    learning_starts: 5000
+    replay: {capacity: 120000}
